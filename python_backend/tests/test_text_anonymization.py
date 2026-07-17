@@ -165,3 +165,33 @@ def test_overlapping_email_text_does_not_leave_email_exposed():
 
     assert "john.doe@example.com" not in result["anonymized_text"]
     assert "<REDACTED_EMAIL>" in result["anonymized_text"]
+
+
+def test_research_profile_shifts_dates_and_removes_patient_context_name():
+    result = anonymize_clinical_text(
+        "Patient John Doe, MRN 123456, visited on 2026-06-16.",
+        profile="research",
+        study_salt="study-a",
+    )
+
+    assert result["privacy_profile"] == "research"
+    assert result["date_strategy"] == "shift"
+    assert "John Doe" not in result["anonymized_text"]
+    assert "123456" not in result["anonymized_text"]
+    assert "2026-06-16" not in result["anonymized_text"]
+    assert "<REDACTED_DATE>" not in result["anonymized_text"]
+    assert result["detected_entities"]["PERSON"] == 1
+    assert result["detected_entities"]["DATE_TIME"] == 1
+
+
+def test_strict_profile_redacts_dates():
+    result = anonymize_clinical_text(
+        "Patient John Doe, MRN 123456, visited on 2026-06-16.",
+        profile="strict",
+        study_salt="study-a",
+    )
+
+    assert result["privacy_profile"] == "strict"
+    assert result["date_strategy"] == "redact"
+    assert "2026-06-16" not in result["anonymized_text"]
+    assert "<REDACTED_DATE>" in result["anonymized_text"]
