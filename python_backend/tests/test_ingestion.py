@@ -170,9 +170,54 @@ class TestIngestionRouting(unittest.TestCase):
         self.assertEqual(body["downstream"]["metadata_indexing"], "pending")
         self.assertEqual(body["downstream"]["blockchain_transaction"], "pending")
 
-    def test_csv_routes_to_csv_handler(self):
-        response = upload_file("sample.csv", b"age,diagnosis\n42,test\n", "text/csv")
-        self.assert_routes_to(response, "csv", "anonymize_csv")
+    def test_csv_upload_returns_completed_safe_tabular_summary(self):
+        csv_content = (
+            b"name,email,phone,mrn,age,gender,diagnosis\n"
+            b"Alice Adams,alice@example.com,555-111-2222,MRN-001,31,F,flu\n"
+            b"Bob Baker,bob@example.com,555-111-3333,MRN-002,32,F,cold\n"
+            b"Carol Chen,carol@example.com,555-111-4444,MRN-003,33,M,flu\n"
+            b"Dan Diaz,dan@example.com,555-111-5555,MRN-004,34,M,cold\n"
+            b"Eve Evans,eve@example.com,555-111-6666,MRN-005,35,F,flu\n"
+        )
+        response = upload_file("sample.csv", csv_content, "text/csv")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        response_text = json.dumps(body)
+        self.assertEqual(body["status"], "success")
+        self.assertEqual(body["detected_modality"], "csv")
+        self.assertEqual(body["handler"], "anonymize_csv")
+        self.assertEqual(body["routing_status"], "handler_selected")
+        self.assertEqual(body["anonymization_status"], "completed")
+        self.assertNotIn("placeholder", response_text.lower())
+        self.assertIn("tabular_summary", body)
+        summary = body["tabular_summary"]
+        self.assertEqual(summary["rows_in"], 5)
+        self.assertEqual(summary["rows_out"], 5)
+        self.assertEqual(summary["k"], 5)
+        self.assertEqual(summary["l"], 2)
+        self.assertEqual(
+            summary["direct_identifiers_removed"],
+            ["name", "email", "phone", "mrn"],
+        )
+        self.assertEqual(summary["quasi_identifiers_used"], ["age", "gender"])
+        self.assertEqual(summary["sensitive_column"], "diagnosis")
+        self.assertTrue(summary["k_anonymity_satisfied"])
+        self.assertTrue(summary["l_diversity_satisfied"])
+        self.assertEqual(body["downstream"]["ipfs_chunking"], "pending")
+        self.assertEqual(body["downstream"]["cid_encryption"], "pending")
+        self.assertEqual(body["downstream"]["metadata_indexing"], "pending")
+        self.assertEqual(body["downstream"]["blockchain_transaction"], "pending")
+        for raw_value in (
+            "Alice Adams",
+            "alice@example.com",
+            "555-111-2222",
+            "MRN-001",
+            "flu",
+            "cold",
+        ):
+            self.assertNotIn(raw_value, response_text)
+        self.assertNotIn("_internal_anonymized_csv", body)
+        self.assertNotIn("file_bytes", body)
 
     def test_text_routes_to_text_handler(self):
         response = upload_file(
@@ -316,10 +361,12 @@ class TestIngestionRouting(unittest.TestCase):
 
         result = asyncio.run(ingest_file(file=fake_file, profile="strict"))
 
-        self.assertEqual(fake_file.seek_offsets, [0])
+        self.assertEqual(fake_file.seek_offsets, [0, 0])
         self.assertEqual(fake_file.position, 0)
         self.assertEqual(result["detected_modality"], "csv")
         self.assertEqual(result["handler"], "anonymize_csv")
+        self.assertEqual(result["anonymization_status"], "completed")
+        self.assertIn("tabular_summary", result)
 
 
 if __name__ == "__main__":
