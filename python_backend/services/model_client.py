@@ -452,6 +452,9 @@ class ModelWorkerClient:
         with self._lock:
             if generation != self._generation:
                 return False
+            # Refuse new work immediately, even before the supervisor thread
+            # gets scheduled to retire this generation.
+            self._ready = False
             self.stats["protocol_errors"] += 1
             for pending in list(self._pending.values()):
                 pending.settle(error=code)

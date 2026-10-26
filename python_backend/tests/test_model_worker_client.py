@@ -611,3 +611,19 @@ def test_invalid_success_or_error_payloads_fail_closed(fake_worker, behaviour, c
         assert "Private" not in str(raised.value)
     finally:
         client.stop()
+
+
+def test_protocol_failure_revokes_readiness_before_supervisor_runs(monkeypatch):
+    from types import SimpleNamespace
+
+    client = ModelWorkerClient()
+    client._generation = 7
+    client._ready = True
+    client._process = SimpleNamespace(poll=lambda: None)
+    # Deliberately leave replacement unscheduled: readiness cannot depend on
+    # how quickly a background thread gets CPU time.
+    monkeypatch.setattr(client, "_replace", lambda *args: None)
+    assert client.is_ready()
+    assert client._protocol_failure(7, "model_response_malformed") is False
+    assert not client.is_ready()
+    client._process = None
