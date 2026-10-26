@@ -7,11 +7,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-from services.ner_phi_detector import (
-    proper_noun_offsets,
-    NerPhiDetectionError,
-    SpacyNerPhiDetector,
-    configured_model_name,
+from services.detection_evidence import (
+    EVIDENCE_DETERMINISTIC,
+    assess_finding,
+    contains_proper_noun_token,
+    count_agreeing,
+    evidence_type,
+    has_clinical_support,
+    is_confirmed_clinical_marker,
 )
 from services.local_model_detectors import (
     MODE_OFFLINE,
@@ -23,6 +26,13 @@ from services.local_model_detectors import (
     calibrated_config_for,
     resolve_model_mode,
 )
+from services.model_client import RemoteModelDetector, worker_enabled
+from services.ner_phi_detector import (
+    NerPhiDetectionError,
+    SpacyNerPhiDetector,
+    configured_model_name,
+    proper_noun_offsets,
+)
 from services.phi_detection import (
     AgeOverThresholdDetector,
     DetectedEntity,
@@ -30,20 +40,15 @@ from services.phi_detection import (
     StructuredPatternDetector,
     resolve_overlaps,
 )
+from services.privacy_profiles import (
+    PrivacyProfileError,
+    get_privacy_profile,
+    validate_privacy_profile,
+)
 from services.surrogates import (
     SURROGATE_PATTERN,
     SurrogateAllocator,
     looks_like_provider,
-)
-from services.model_client import RemoteModelDetector, worker_enabled
-from services.detection_evidence import (
-    contains_proper_noun_token,
-    has_clinical_support,
-    is_confirmed_clinical_marker,
-    EVIDENCE_DETERMINISTIC,
-    assess_finding,
-    count_agreeing,
-    evidence_type,
 )
 from services.text_utility import measure_text_utility
 from services.transformation_provenance import (
@@ -52,12 +57,6 @@ from services.transformation_provenance import (
     ProvenanceBuilder,
     TransformationProvenance,
     kind_for_replacement,
-)
-
-from services.privacy_profiles import (
-    PrivacyProfileError,
-    get_privacy_profile,
-    validate_privacy_profile,
 )
 
 SUPPORTED_PROFILES = {"strict", "research"}
@@ -86,6 +85,7 @@ DIRECT_IDENTIFIER_REDACTIONS = {
     "DEVICE_ID": "<REDACTED_DEVICE_ID>",
 }
 
+
 class TextAnonymizationError(ValueError):
     def __init__(self, detail: str, status_code: int = 400):
         super().__init__(detail)
@@ -101,9 +101,7 @@ def stable_hash(
 ) -> str:
     """Build a research-profile compatibility surrogate, not a Safe Harbor result."""
     normalized = value.strip().lower()
-    digest = hashlib.sha256(
-        f"{salt}:{entity_type}:{normalized}".encode("utf-8")
-    )
+    digest = hashlib.sha256(f"{salt}:{entity_type}:{normalized}".encode("utf-8"))
     return digest.hexdigest().upper()[:length]
 
 
@@ -261,9 +259,7 @@ def _apply_evidence_model(
             entity.entity_type,
             entity.source,
             agreeing_detectors=agreeing,
-            clinical_support=has_clinical_support(
-                entities, entity.start, entity.end
-            ),
+            clinical_support=has_clinical_support(entities, entity.start, entity.end),
             contains_proper_noun=contains_proper_noun_token(
                 proper_nouns, entity.start, entity.end
             ),
@@ -355,6 +351,7 @@ def _shift_date_text(value: str, salt: str) -> str:
         except ValueError:
             continue
     return "<REDACTED_DATE>"
+
 
 def _replacement_for(
     entity_type: str,
@@ -511,9 +508,7 @@ def _read_local_env_salt() -> str | None:
 
 def _resolve_study_salt(study_salt: str | None) -> str:
     configured_salt = (
-        study_salt
-        or os.getenv(STUDY_SALT_ENV_VAR)
-        or _read_local_env_salt()
+        study_salt or os.getenv(STUDY_SALT_ENV_VAR) or _read_local_env_salt()
     )
     if configured_salt and configured_salt.strip():
         return configured_salt.strip()
@@ -569,9 +564,7 @@ def anonymize_clinical_text(
 
     try:
         model_name = configured_model_name()
-        entities, detection_review = _detect_entities(
-            text, model_name, privacy_profile
-        )
+        entities, detection_review = _detect_entities(text, model_name, privacy_profile)
     except NerPhiDetectionError as exc:
         raise TextAnonymizationError(
             exc.error_code,
@@ -649,8 +642,6 @@ def anonymize_clinical_text(
     }
 
 
-
-
 # ---------------------------------------------------------------------------
 # Post-redaction validation (Phase 4)
 # ---------------------------------------------------------------------------
@@ -674,7 +665,9 @@ def mask_release_placeholders(text: str) -> str:
     masked = _PLACEHOLDER_PATTERN.sub(lambda match: " " * len(match.group(0)), text)
     masked = _SURROGATE_PATTERN.sub(lambda match: " " * len(match.group(0)), masked)
     masked = SURROGATE_PATTERN.sub(lambda match: " " * len(match.group(0)), masked)
-    return masked.replace(AGE_AGGREGATE_REPLACEMENT, " " * len(AGE_AGGREGATE_REPLACEMENT))
+    return masked.replace(
+        AGE_AGGREGATE_REPLACEMENT, " " * len(AGE_AGGREGATE_REPLACEMENT)
+    )
 
 
 # -- classification vocabulary for second-pass findings ---------------------
@@ -822,7 +815,7 @@ def classify_extracted_text(text: str) -> str:
 #: Characters that carry no identity of their own. Stripped from the
 #: uncovered remainder of a straddling prediction before it is assessed,
 #: so a trailing comma is not mistaken for surviving content.
-_BOUNDARY_CHARACTERS = string.whitespace + '.,;:()[]{}<>\'"-/\\'
+_BOUNDARY_CHARACTERS = string.whitespace + ".,;:()[]{}<>'\"-/\\"
 
 
 def _remainder_is_accounted_for(

@@ -71,21 +71,44 @@ class StemPool:
 STEMS: Dict[str, StemPool] = {
     "development": StemPool(
         given=(
-            "Arvind", "Bhavana", "Chetanya", "Dhruvika", "Eshaan", "Farhana",
-            "Gautami", "Harishwar", "Ingvild", "Joakim", "Katarzyna", "Lennart",
+            "Arvind",
+            "Bhavana",
+            "Chetanya",
+            "Dhruvika",
+            "Eshaan",
+            "Farhana",
+            "Gautami",
+            "Harishwar",
+            "Ingvild",
+            "Joakim",
+            "Katarzyna",
+            "Lennart",
         ),
         family=(
-            "Thistlewood", "Barrowmede", "Culverhaye", "Draymont", "Everwilde",
-            "Fenwarden", "Glaisdale", "Hollowbeck", "Ironvale", "Jarrowmoor",
-            "Kestrelbourne", "Lindenshaw",
+            "Thistlewood",
+            "Barrowmede",
+            "Culverhaye",
+            "Draymont",
+            "Everwilde",
+            "Fenwarden",
+            "Glaisdale",
+            "Hollowbeck",
+            "Ironvale",
+            "Jarrowmoor",
+            "Kestrelbourne",
+            "Lindenshaw",
         ),
         unicode_given=("Ílvaro", "Ķrishnā", "Ǫlafur"),
         unicode_family=("Peñaloza-Ferrán", "Ayyangār-Śāstri", "Þorvaldsdóttir"),
         place=("Wrenmarsh", "Coldbarrow", "Fernhollow", "Aldergate"),
         street=("Bramblewick", "Quillon", "Harrowmere", "Ashvale"),
         org_head=("Quillfeather", "Vermillion", "Northmarsh", "Larchgate"),
-        org_tail=("Textiles Ltd", "Research Collective", "General Hospital",
-                  "Diagnostics Ltd"),
+        org_tail=(
+            "Textiles Ltd",
+            "Research Collective",
+            "General Hospital",
+            "Diagnostics Ltd",
+        ),
         numeric_block="41",
         phone_block=100,
         ip_network="203.0.113",
@@ -99,21 +122,44 @@ STEMS: Dict[str, StemPool] = {
     ),
     "calibration": StemPool(
         given=(
-            "Rukmini", "Gareth", "Sundaram", "Marjolein", "Prathibha", "Aloysius",
-            "Naveenya", "Bertrand", "Chandrika", "Desmond", "Ellammal", "Fitzroy",
+            "Rukmini",
+            "Gareth",
+            "Sundaram",
+            "Marjolein",
+            "Prathibha",
+            "Aloysius",
+            "Naveenya",
+            "Bertrand",
+            "Chandrika",
+            "Desmond",
+            "Ellammal",
+            "Fitzroy",
         ),
         family=(
-            "Balasubramanian", "Ollivander", "Brackenridge", "Windlass",
-            "Halcyonmere", "Pendlemere", "Ashcombe", "Merridew", "Corwinshaw",
-            "Dunwallow", "Estermont", "Farrowgate",
+            "Balasubramanian",
+            "Ollivander",
+            "Brackenridge",
+            "Windlass",
+            "Halcyonmere",
+            "Pendlemere",
+            "Ashcombe",
+            "Merridew",
+            "Corwinshaw",
+            "Dunwallow",
+            "Estermont",
+            "Farrowgate",
         ),
         unicode_given=("Zoë", "Ravīndra", "Åsvald"),
         unicode_family=("Müller-Thorvald", "Śarmā-Nāyar", "Øksendal"),
         place=("Ashcombe Vale", "Merridew Cross", "Pendlemere", "Halcyon Reach"),
         street=("Pendlemere", "Corwin", "Halcyon", "Windlass"),
         org_head=("Windlass", "Halcyon", "Saint Corwin", "Pendlemere"),
-        org_tail=("Aeronautics Pvt Ltd", "Biosciences Trust",
-                  "Memorial Institute", "Imaging Laboratory"),
+        org_tail=(
+            "Aeronautics Pvt Ltd",
+            "Biosciences Trust",
+            "Memorial Institute",
+            "Imaging Laboratory",
+        ),
         numeric_block="52",
         phone_block=120,
         ip_network="198.51.100",
@@ -127,22 +173,44 @@ STEMS: Dict[str, StemPool] = {
     ),
     "test": StemPool(
         given=(
-            "Meenakshi", "Cornelius", "Lakshmipathy", "Beatrix", "Nandini",
-            "Bartholomew", "Vaidehi", "Percival", "Sharmila", "Reginald",
-            "Thangaraj", "Ursula",
+            "Meenakshi",
+            "Cornelius",
+            "Lakshmipathy",
+            "Beatrix",
+            "Nandini",
+            "Bartholomew",
+            "Vaidehi",
+            "Percival",
+            "Sharmila",
+            "Reginald",
+            "Thangaraj",
+            "Ursula",
         ),
         family=(
-            "Raghunathan", "Ashdown-Blythe", "Sundaresan", "Quillerton",
-            "Everdene", "Cinderhall", "Fallowfield", "Kestrelmoor", "Barrowdale",
-            "Marlowridge", "Nettlefold", "Oakenshott",
+            "Raghunathan",
+            "Ashdown-Blythe",
+            "Sundaresan",
+            "Quillerton",
+            "Everdene",
+            "Cinderhall",
+            "Fallowfield",
+            "Kestrelmoor",
+            "Barrowdale",
+            "Marlowridge",
+            "Nettlefold",
+            "Oakenshott",
         ),
         unicode_given=("François", "Kṛṣṇa", "Ingrídur"),
         unicode_family=("Lécuyer-Mounier", "Mūrti-Iyer", "Sigurðardóttir"),
         place=("Kestrelmoor", "Barrowdale", "Fallowfield", "Marlowe Ridge"),
         street=("Marlowe Ridge", "Cinderhall", "Everdene", "Nettlefold"),
         org_head=("Everdene", "Cinderhall", "Fallowfield", "Nettlefold"),
-        org_tail=("Marine Logistics", "Genomics Foundation",
-                  "Regional Medical Centre", "Pathology Laboratory"),
+        org_tail=(
+            "Marine Logistics",
+            "Genomics Foundation",
+            "Regional Medical Centre",
+            "Pathology Laboratory",
+        ),
         numeric_block="63",
         phone_block=140,
         ip_network="192.0.2",
@@ -156,24 +224,44 @@ STEMS: Dict[str, StemPool] = {
     ),
     "heldout_v2": StemPool(
         given=(
-            "Padmavathi", "Algernon", "Ganesaraj", "Hortensia", "Shalini",
-            "Peregrine", "Kanchana", "Wolstan", "Yamunadevi", "Zachariah",
-            "Bhuvaneswari", "Casimir",
+            "Padmavathi",
+            "Algernon",
+            "Ganesaraj",
+            "Hortensia",
+            "Shalini",
+            "Peregrine",
+            "Kanchana",
+            "Wolstan",
+            "Yamunadevi",
+            "Zachariah",
+            "Bhuvaneswari",
+            "Casimir",
         ),
         family=(
-            "Venkataraghavan", "Fitzwilliam-Crewe", "Muthukrishnan",
-            "Wolstenholme", "Larkspurne", "Duskwater", "Umberfield",
-            "Calderstone", "Quillonhollow", "Ardentmere", "Bramblecote",
+            "Venkataraghavan",
+            "Fitzwilliam-Crewe",
+            "Muthukrishnan",
+            "Wolstenholme",
+            "Larkspurne",
+            "Duskwater",
+            "Umberfield",
+            "Calderstone",
+            "Quillonhollow",
+            "Ardentmere",
+            "Bramblecote",
             "Cindermoor",
         ),
         unicode_given=("Åsa", "Bhāskara", "Élodie"),
         unicode_family=("Lindqvist-Öberg", "Rāmānujan-Aiyar", "Ødegård"),
         place=("Umberfield Reach", "Calderstone", "Duskwater", "Larkspur Vale"),
         street=("Quillon Hollow", "Larkspur", "Duskwater", "Umberfield"),
-        org_head=("Larkspur", "Ardent Meridian", "Duskwater Priory",
-                  "Calderstone"),
-        org_tail=("Instrumentation GmbH", "Research Society",
-                  "Teaching Hospital", "Radiology Clinic"),
+        org_head=("Larkspur", "Ardent Meridian", "Duskwater Priory", "Calderstone"),
+        org_tail=(
+            "Instrumentation GmbH",
+            "Research Society",
+            "Teaching Hospital",
+            "Radiology Clinic",
+        ),
         numeric_block="74",
         phone_block=160,
         ip_network="198.18.51",
@@ -187,22 +275,44 @@ STEMS: Dict[str, StemPool] = {
     ),
     "heldout_v3": StemPool(
         given=(
-            "Yashodhara", "Montgomery", "Vaikuntam", "Rosalind", "Anantharaman",
-            "Cuthbert", "Devayani", "Ferdinand", "Girijadevi", "Humphrey",
-            "Ilangovan", "Jocasta",
+            "Yashodhara",
+            "Montgomery",
+            "Vaikuntam",
+            "Rosalind",
+            "Anantharaman",
+            "Cuthbert",
+            "Devayani",
+            "Ferdinand",
+            "Girijadevi",
+            "Humphrey",
+            "Ilangovan",
+            "Jocasta",
         ),
         family=(
-            "Sathyanarayanan", "Wintersgill", "Ponnambalam", "Ravencourt",
-            "Thiruvengadam", "Standerwick", "Muthuswamy", "Highbarrow",
-            "Chidambaram", "Fairweather-Voss", "Nagarathinam", "Oldencastle",
+            "Sathyanarayanan",
+            "Wintersgill",
+            "Ponnambalam",
+            "Ravencourt",
+            "Thiruvengadam",
+            "Standerwick",
+            "Muthuswamy",
+            "Highbarrow",
+            "Chidambaram",
+            "Fairweather-Voss",
+            "Nagarathinam",
+            "Oldencastle",
         ),
         unicode_given=("Ómar", "Lakṣmī", "Sébastien"),
         unicode_family=("Björnsdóttir", "Tirumalāchārya", "Grüneberg-Vasseur"),
         place=("Highbarrow", "Ravencourt", "Standerwick", "Winterscombe"),
         street=("Ravencourt", "Highbarrow", "Standerwick", "Oldencastle"),
         org_head=("Ravencourt", "Highbarrow", "Standerwick", "Winterscombe"),
-        org_tail=("Aviation Systems Ltd", "Bioinformatics Trust",
-                  "District Hospital", "Screening Laboratory"),
+        org_tail=(
+            "Aviation Systems Ltd",
+            "Bioinformatics Trust",
+            "District Hospital",
+            "Screening Laboratory",
+        ),
         numeric_block="85",
         phone_block=180,
         ip_network="203.0.113",
@@ -289,7 +399,9 @@ class _Values:
         self.index = index
 
     def person(self) -> str:
-        return f"{self.rng.choice(self.stems.given)} {self.rng.choice(self.stems.family)}"
+        return (
+            f"{self.rng.choice(self.stems.given)} {self.rng.choice(self.stems.family)}"
+        )
 
     def unicode_person(self) -> str:
         return (
@@ -371,7 +483,9 @@ class _Values:
 
     def license_number(self) -> str:
         letter = self.rng.choice("KRMPQZ")
-        return f"DL-{letter}{self.stems.numeric_block}{self.rng.randrange(10000, 99999)}X"
+        return (
+            f"DL-{letter}{self.stems.numeric_block}{self.rng.randrange(10000, 99999)}X"
+        )
 
     def certificate_number(self) -> str:
         role = self.rng.choice(("MB", "NP", "RN", "PT"))
@@ -576,7 +690,9 @@ def _misspelt(b, v: _Values) -> str:
     b.t("Ward note\n").t(MISSPELT_LABELS[v.index % len(MISSPELT_LABELS)])
     b.t(": ").phi(v.mrn(), "MRN", "misspelt_label")
     b.t("\nPateint name ").phi(patient, "PERSON", "misspelt_label")
-    b.t("\nSeen by ").phi(v.misspell(v.clinician()), "PERSON_CLINICIAN", "misspelt_value")
+    b.t("\nSeen by ").phi(
+        v.misspell(v.clinician()), "PERSON_CLINICIAN", "misspelt_value"
+    )
     b.t("\nPt afebrile, obs stable, r/v in a.m. per usual protocol.")
     return "Misspelt field labels and a misspelt clinician name."
 
@@ -587,8 +703,12 @@ def _unicode(b, v: _Values) -> str:
     b.t(" (preferred spelling retained).\nSecond opinion from ")
     b.phi(v.unicode_person(), "PERSON", "unicode", "transliteration")
     b.t("\nContact ").phi(v.email(unicode_person), "EMAIL", "unicode")
-    b.t("\nCASE ESCALATED BY ").phi(v.person().upper(), "PERSON", "mixed_case", "uppercase")
-    b.t(" and reviewed by ").phi(v.person().lower(), "PERSON", "mixed_case", "lowercase")
+    b.t("\nCASE ESCALATED BY ").phi(
+        v.person().upper(), "PERSON", "mixed_case", "uppercase"
+    )
+    b.t(" and reviewed by ").phi(
+        v.person().lower(), "PERSON", "mixed_case", "lowercase"
+    )
     b.t(".")
     return "Unicode names, transliteration and mixed casing."
 

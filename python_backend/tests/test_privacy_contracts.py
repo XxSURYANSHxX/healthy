@@ -5,6 +5,7 @@ import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from services.ingestion import route_for_ingestion  # noqa: E402
 from services.privacy_contracts import (  # noqa: E402
     PrivacyPolicy,
     ReleaseDecision,
@@ -14,7 +15,6 @@ from services.privacy_contracts import (  # noqa: E402
     issue_release,
 )
 from services.privacy_policy import resolve_privacy_policy  # noqa: E402
-from services.ingestion import route_for_ingestion  # noqa: E402
 
 
 def test_strict_is_compatibility_alias_for_safe_harbor_v1():

@@ -124,9 +124,7 @@ class ModelWorkerClient:
 
     def is_ready(self) -> bool:
         return (
-            self._ready
-            and self._process is not None
-            and self._process.poll() is None
+            self._ready and self._process is not None and self._process.poll() is None
         )
 
     # -- protocol -------------------------------------------------------

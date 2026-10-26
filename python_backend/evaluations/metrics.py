@@ -161,11 +161,7 @@ def aggregate(
         else 0.0
     )
     recall = true_positives / gold_total if gold_total else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall)
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
 
     return {
         "documents": len(per_doc),
@@ -179,19 +175,19 @@ def aggregate(
         "typed_recall": round(typed_hits / gold_total, 4) if gold_total else 0.0,
         "f1": round(f1, 4),
         # A document leaks if any single gold span in it survived.
-        "document_leakage_rate": round(len(leaking_docs) / len(per_doc), 4)
-        if per_doc
-        else 0.0,
+        "document_leakage_rate": (
+            round(len(leaking_docs) / len(per_doc), 4) if per_doc else 0.0
+        ),
         "leaking_documents": sorted(leaking_docs),
         # Useful-text preservation: the share of recorded non-PHI terms that
         # were NOT swept up by a detection.
         "negative_terms": negatives_total,
         "negative_terms_redacted": negatives_redacted,
-        "useful_text_preservation": round(
-            1 - (negatives_redacted / negatives_total), 4
-        )
-        if negatives_total
-        else 1.0,
+        "useful_text_preservation": (
+            round(1 - (negatives_redacted / negatives_total), 4)
+            if negatives_total
+            else 1.0
+        ),
         "composite_cost": round(FN_WEIGHT * false_negatives + false_positives, 2),
         "by_category": {
             name: {

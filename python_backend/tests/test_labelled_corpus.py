@@ -35,7 +35,6 @@ from evaluations.metrics import (  # noqa: E402
     score_document,
 )
 
-
 # ---------------------------------------------------------------------------
 # Structure
 # ---------------------------------------------------------------------------
@@ -196,9 +195,7 @@ def test_clinical_eponyms_are_recorded_as_negative_controls():
 def test_chunk_boundary_document_actually_straddles_a_window():
     from evaluations.labelled_corpus import partition_documents as docs
 
-    document = next(
-        d for d in docs(PARTITION_TEST) if "chunk_boundary" in d.tags
-    )
+    document = next(d for d in docs(PARTITION_TEST) if "chunk_boundary" in d.tags)
     boundary_spans = [s for s in document.spans if "chunk_boundary" in s.tags]
 
     assert boundary_spans, "no span is tagged as straddling a boundary"
@@ -279,9 +276,7 @@ def test_typed_recall_separates_wrong_label_from_missed_span():
 
 
 def test_redacting_a_negative_control_lowers_useful_text_preservation():
-    document = next(
-        d for d in partition_documents(PARTITION_DEV) if d.negatives
-    )
+    document = next(d for d in partition_documents(PARTITION_DEV) if d.negatives)
     start, end, _ = document.negatives[0]
     detection = Detection(start=start, end=end, category="PERSON", source="test")
 

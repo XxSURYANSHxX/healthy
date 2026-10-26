@@ -68,9 +68,7 @@ def _drift(before: Sequence[float], after: Sequence[float]) -> float:
     return round(min(1.0, abs(mean_after - mean_before) / spread), 4)
 
 
-def _frequency_drift(
-    before: Mapping[str, int], after: Mapping[str, int]
-) -> float:
+def _frequency_drift(before: Mapping[str, int], after: Mapping[str, int]) -> float:
     """Total variation distance between two category frequency tables."""
     total_before = sum(before.values()) or 1
     total_after = sum(after.values()) or 1
@@ -88,9 +86,7 @@ def _correlation(left: Sequence[float], right: Sequence[float]) -> Optional[floa
         return None
     mean_left = sum(left) / len(left)
     mean_right = sum(right) / len(right)
-    covariance = sum(
-        (a - mean_left) * (b - mean_right) for a, b in zip(left, right)
-    )
+    covariance = sum((a - mean_left) * (b - mean_right) for a, b in zip(left, right))
     variance_left = sum((a - mean_left) ** 2 for a in left)
     variance_right = sum((b - mean_right) ** 2 for b in right)
     if variance_left <= 0 or variance_right <= 0:
@@ -111,9 +107,7 @@ def _numeric_column(rows: Sequence[Mapping[str, Any]], column: str) -> List[floa
     return values
 
 
-def _category_counts(
-    rows: Sequence[Mapping[str, Any]], column: str
-) -> Dict[str, int]:
+def _category_counts(rows: Sequence[Mapping[str, Any]], column: str) -> Dict[str, int]:
     """Frequencies keyed by a stable hash, never by the category itself.
 
     The shape of a frequency table is what utility depends on; the labels are
@@ -290,8 +284,7 @@ def measure_dicom_utility(
         ),
         "redaction_regions": len(redaction_boxes),
         "redacted_pixel_area": sum(
-            max(0, box[2] - box[0]) * max(0, box[3] - box[1])
-            for box in redaction_boxes
+            max(0, box[2] - box[0]) * max(0, box[3] - box[1]) for box in redaction_boxes
         ),
     }
     total_pixels = report["rows"] * report["columns"] * max(1, report["frames"])
@@ -357,7 +350,8 @@ def measure_dicom_utility(
     relationship_keywords = ("StudyInstanceUID", "SeriesInstanceUID", "Modality")
     report["study_series_relationship_preserved"] = all(
         str(getattr(after, keyword, "") or "")
-        and str(getattr(after, keyword, "") or "") == str(getattr(before, keyword, "") or "")
+        and str(getattr(after, keyword, "") or "")
+        == str(getattr(before, keyword, "") or "")
         for keyword in ("StudyInstanceUID", "SeriesInstanceUID")
     )
     report["required_metadata_present"] = sum(
@@ -421,7 +415,9 @@ def measure_nifti_utility(
     zooms_after = tuple(float(z) for z in header_after.get_zooms())
 
     report["shape_preserved"] = shape_after == shape_before
-    report["datatype_preserved"] = int(header_after["datatype"]) == report["datatype_code"]
+    report["datatype_preserved"] = (
+        int(header_after["datatype"]) == report["datatype_code"]
+    )
     report["voxel_spacing_preserved"] = all(
         math.isclose(a, b, rel_tol=1e-6, abs_tol=1e-9)
         for a, b in zip(zooms_before, zooms_after)
@@ -675,7 +671,9 @@ def measure_raster_utility(
     report["dimensions_preserved"] = after.size == before.size
     report["pixel_format_preserved"] = after.mode == before.mode
     report["lossless_output_valid"] = (
-        bool(lossless) if lossless is not None else after.format in {"PNG", "TIFF", "BMP"}
+        bool(lossless)
+        if lossless is not None
+        else after.format in {"PNG", "TIFF", "BMP"}
     )
 
     if after.size != before.size:

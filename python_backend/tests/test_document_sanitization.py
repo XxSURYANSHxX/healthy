@@ -13,7 +13,11 @@ import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services import document_sanitization as docs  # noqa: E402
-from services.ingestion import IngestionError, detect_modality, route_for_ingestion  # noqa: E402
+from services.ingestion import (  # noqa: E402
+    IngestionError,
+    detect_modality,
+    route_for_ingestion,
+)
 from services.text_anonymization import (  # noqa: E402
     mask_release_placeholders,
     residual_phi_categories,
@@ -353,7 +357,10 @@ def test_release_placeholders_are_masked_without_shifting_offsets():
 
 
 def test_clean_redacted_text_has_no_residual_findings():
-    assert residual_phi_categories("Patient <REDACTED_NAME> called <REDACTED_PHONE>.") == {}
+    assert (
+        residual_phi_categories("Patient <REDACTED_NAME> called <REDACTED_PHONE>.")
+        == {}
+    )
 
 
 def test_residual_phi_blocks_the_text_release(monkeypatch):
@@ -418,7 +425,6 @@ def test_clean_text_still_releases_with_the_residual_validator():
 @pytest.fixture(scope="module")
 def api_client():
     from fastapi.testclient import TestClient
-
     from main import app
 
     return TestClient(app)

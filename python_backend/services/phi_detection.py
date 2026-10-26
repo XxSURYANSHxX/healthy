@@ -86,8 +86,7 @@ STRUCTURED_PATTERNS: Sequence[_PatternDefinition] = (
         "phone_number",
         "PHONE_NUMBER",
         _compile(
-            r"(?<!\w)(?:\+?1[\s.-]?)?"
-            r"(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)"
+            r"(?<!\w)(?:\+?1[\s.-]?)?" r"(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)"
         ),
     ),
     _PatternDefinition(
@@ -147,12 +146,8 @@ class StructuredPatternDetector:
 # not an identifier on its own and is ordinary clinical fact, so it is left
 # alone. A bare number is never treated as an age: an explicit age cue must be
 # present, or "the patient received 94 mg" would be destroyed.
-_AGE_WITH_CUE = _compile(
-    r"(?:\bage[ds]?\b\s*[:\-]?\s*|\baged\s+)(\d{1,3})\b"
-)
-_AGE_WITH_UNIT = _compile(
-    r"\b(\d{1,3})\s*(?:-\s*)?(?:years?|yrs?)\s*(?:-\s*)?old\b"
-)
+_AGE_WITH_CUE = _compile(r"(?:\bage[ds]?\b\s*[:\-]?\s*|\baged\s+)(\d{1,3})\b")
+_AGE_WITH_UNIT = _compile(r"\b(\d{1,3})\s*(?:-\s*)?(?:years?|yrs?)\s*(?:-\s*)?old\b")
 _AGE_YO = _compile(r"\b(\d{1,3})\s*(?:y/?o|yo)\b")
 
 _AGE_PATTERNS = (_AGE_WITH_CUE, _AGE_WITH_UNIT, _AGE_YO)
@@ -256,9 +251,7 @@ def resolve_overlaps(
     """Select valid, deterministic, non-overlapping spans."""
 
     valid = {
-        entity
-        for entity in entities
-        if 0 <= entity.start < entity.end <= text_length
+        entity for entity in entities if 0 <= entity.start < entity.end <= text_length
     }
     # The key must totally order the candidates: set iteration order is not
     # stable across runs, so any tie left here would make redaction

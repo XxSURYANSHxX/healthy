@@ -124,7 +124,9 @@ def _write_branch_ref(snapshot: Path, revision: str, ref: str) -> None:
     refs_dir = repo_root / "refs"
     refs_dir.mkdir(parents=True, exist_ok=True)
     ref_path = refs_dir / ref
-    current = ref_path.read_text(encoding="utf-8").strip() if ref_path.exists() else None
+    current = (
+        ref_path.read_text(encoding="utf-8").strip() if ref_path.exists() else None
+    )
     if current != revision:
         ref_path.write_text(revision, encoding="utf-8")
 
@@ -150,13 +152,19 @@ def provision(name: str, spec: Dict[str, str], offline: bool) -> Dict[str, Any]:
     except SystemExit:
         raise
     except Exception as exc:
-        print(f"  FAILED to resolve snapshot: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(
+            f"  FAILED to resolve snapshot: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
         raise SystemExit(EXIT_MISSING)
     elapsed = time.perf_counter() - started
 
     weight_path = snapshot / spec["weight_file"]
     if not weight_path.is_file():
-        print(f"  FAILED: declared weight file is absent: {spec['weight_file']}", file=sys.stderr)
+        print(
+            f"  FAILED: declared weight file is absent: {spec['weight_file']}",
+            file=sys.stderr,
+        )
         raise SystemExit(EXIT_MISSING)
 
     files: List[Tuple[str, int, str]] = []
@@ -233,7 +241,9 @@ def main() -> int:
     manifest = _load_manifest()
     print(f"manifest    : {MANIFEST_PATH.relative_to(BACKEND_ROOT)}")
     print(f"cache root  : {CACHE_ROOT.relative_to(BACKEND_ROOT)}  (git-ignored)")
-    print(f"mode        : {'verify-only, offline' if args.verify else 'download and verify'}")
+    print(
+        f"mode        : {'verify-only, offline' if args.verify else 'download and verify'}"
+    )
 
     started = time.perf_counter()
     results = {

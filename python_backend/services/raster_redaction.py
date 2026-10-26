@@ -24,10 +24,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
-
 from services.ocr_redaction import (
-    OCREngineUnavailable,
     OCRBackend,
+    OCREngineUnavailable,
     clip_box_to_image,
     get_default_ocr_backend,
 )
@@ -144,7 +143,8 @@ def _decode(content: bytes) -> Tuple[Image.Image, str, bool]:
             or any(
                 isinstance(value, str) and value.strip()
                 for key, value in probe.info.items()
-                if key not in {"dpi", "jfif", "jfif_version", "jfif_unit", "jfif_density"}
+                if key
+                not in {"dpi", "jfif", "jfif_version", "jfif_unit", "jfif_density"}
             )
         )
         probe.load()

@@ -51,6 +51,18 @@ class UnavailableOCRBackend:
         raise AssertionError("unavailable backend must not run")
 
 
+@pytest.fixture
+def blank_image_ocr(monkeypatch):
+    """Run the real pixel verifiers with deterministic OCR for blank fixtures."""
+    from services import ocr_redaction, raster_redaction
+
+    def backend():
+        return FakeOCRBackend([])
+
+    monkeypatch.setattr(ocr_redaction, "get_default_ocr_backend", backend)
+    monkeypatch.setattr(raster_redaction, "get_default_ocr_backend", backend)
+
+
 def _png(color=200, size=(32, 32)) -> bytes:
     buffer = BytesIO()
     Image.new("RGB", size, (color, color, color)).save(buffer, format="PNG")
@@ -248,13 +260,11 @@ def _png_with_metadata(text=f"Patient {SYNTHETIC_NAME}") -> bytes:
     info = PngImagePlugin.PngInfo()
     info.add_text("Patient", text)
     buffer = BytesIO()
-    Image.new("RGB", (32, 32), (200, 200, 200)).save(
-        buffer, format="PNG", pnginfo=info
-    )
+    Image.new("RGB", (32, 32), (200, 200, 200)).save(buffer, format="PNG", pnginfo=info)
     return buffer.getvalue()
 
 
-def test_raster_preview_is_sanitized_not_passed_through():
+def test_raster_preview_is_sanitized_not_passed_through(blank_image_ocr):
     # The old generator streamed the input bytes back verbatim. A clean image
     # can legitimately re-encode to the same pixels, so what proves the bytes
     # went through the sanitizer is that the input's metadata is gone and the
@@ -284,7 +294,9 @@ def test_raster_preview_blocks_when_ocr_is_unavailable(monkeypatch):
         ),
     )
 
-    outcome = gate.sanitized_preview(_png(), filename="scan.png", content_type="image/png")
+    outcome = gate.sanitized_preview(
+        _png(), filename="scan.png", content_type="image/png"
+    )
 
     assert outcome.released is False
     assert outcome.content is None
@@ -306,13 +318,15 @@ def test_raster_preview_blocks_when_text_is_not_cleared(monkeypatch):
         ),
     )
 
-    outcome = gate.sanitized_preview(_png(), filename="scan.png", content_type="image/png")
+    outcome = gate.sanitized_preview(
+        _png(), filename="scan.png", content_type="image/png"
+    )
 
     assert outcome.released is False
     assert outcome.status == gate.STATUS_BLOCKED
 
 
-def test_dicom_preview_renders_only_verified_pixels():
+def test_dicom_preview_renders_only_verified_pixels(blank_image_ocr):
     payload = build_dicom(np.full((16, 16), 90, dtype=np.uint8))
 
     outcome = gate.sanitized_preview(payload, filename="scan.dcm")
@@ -397,9 +411,7 @@ def test_empty_preview_upload_is_rejected():
 
 
 def test_preview_summary_never_carries_bytes():
-    outcome = gate.sanitized_preview(
-        b"slide bytes", filename="slide.svs"
-    )
+    outcome = gate.sanitized_preview(b"slide bytes", filename="slide.svs")
 
     assert "content" not in json.dumps(outcome.safe_summary())
     assert "slide bytes" not in repr(outcome)
@@ -413,7 +425,6 @@ def test_preview_summary_never_carries_bytes():
 @pytest.fixture(scope="module")
 def api_client():
     from fastapi.testclient import TestClient
-
     from main import app
 
     return TestClient(app)
@@ -491,7 +502,9 @@ def test_store_enhanced_is_gated_the_same_way(api_client):
     assert SYNTHETIC_NAME not in response.text
 
 
-def test_simple_preview_no_longer_streams_the_upload_verbatim(api_client):
+def test_simple_preview_no_longer_streams_the_upload_verbatim(
+    api_client, blank_image_ocr
+):
     original = _png_with_metadata()
 
     response = api_client.post(
@@ -518,7 +531,7 @@ def test_preview_blocks_a_modality_it_cannot_sanitize(api_client):
     assert gate.REASON_FACIAL_RECONSTRUCTION in body["reason_codes"]
 
 
-def test_preview_dicom_returns_sanitized_pixels(api_client):
+def test_preview_dicom_returns_sanitized_pixels(api_client, blank_image_ocr):
     payload = build_dicom(np.full((16, 16), 90, dtype=np.uint8))
 
     response = api_client.post(

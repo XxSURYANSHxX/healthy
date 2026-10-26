@@ -390,9 +390,7 @@ def _render_dicom_png(sanitized_dicom: bytes) -> bytes:
     if maximum == minimum:
         normalized = np.zeros(pixels.shape, dtype=np.uint8)
     else:
-        normalized = (((pixels - minimum) / (maximum - minimum)) * 255).astype(
-            np.uint8
-        )
+        normalized = (((pixels - minimum) / (maximum - minimum)) * 255).astype(np.uint8)
 
     mode = "RGB" if normalized.ndim == 3 else "L"
     buffer = BytesIO()

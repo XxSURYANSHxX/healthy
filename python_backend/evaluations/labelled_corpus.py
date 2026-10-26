@@ -480,8 +480,12 @@ def _build_partition(partition: str) -> List[LabelledDocument]:
     b.t(" (preferred spelling retained).\nSecond opinion from ")
     b.phi(p.person_unicode[1], "PERSON", "unicode", "transliteration")
     b.t(".\nContact address: ").phi(p.email_unicode, "EMAIL", "unicode")
-    b.t("\nCASE ESCALATED BY ").phi(p.person[0].upper(), "PERSON", "mixed_case", "uppercase")
-    b.t(" and reviewed by ").phi(p.person[1].lower(), "PERSON", "mixed_case", "lowercase")
+    b.t("\nCASE ESCALATED BY ").phi(
+        p.person[0].upper(), "PERSON", "mixed_case", "uppercase"
+    )
+    b.t(" and reviewed by ").phi(
+        p.person[1].lower(), "PERSON", "mixed_case", "lowercase"
+    )
     b.t(".")
     docs.append(b.done("Unicode names, transliteration, upper and lower casing."))
 
@@ -535,7 +539,9 @@ def _build_partition(partition: str) -> List[LabelledDocument]:
     b.t("\nCertificate ").phi(p.certificate_number, "CERTIFICATE_NUMBER", "certificate")
     b.t("\nDevice ID ").phi(p.device_id, "DEVICE_ID")
     b.t("\nVehicle VIN ").phi(p.vehicle_id, "VEHICLE_ID", "vehicle")
-    b.t("\nBiometric template reference ").phi(p.biometric_id, "BIOMETRIC_ID", "biometric")
+    b.t("\nBiometric template reference ").phi(
+        p.biometric_id, "BIOMETRIC_ID", "biometric"
+    )
     b.t("\nLegacy study code ").phi(p.unusual_id, "UNUSUAL_ID", "unusual_format")
     b.t("\nSSN ").phi(p.ssn, "SSN", "ssn")
     docs.append(b.done("The full identifier sweep, including rarely handled kinds."))

@@ -136,7 +136,9 @@ class _BatchScanner:
         if size >= SCAN_BATCH_BYTES:
             # A single oversized cell is scanned on its own, truncated to the
             # batch budget rather than skipped.
-            self._scan(cleaned.encode("utf-8")[:SCAN_BATCH_BYTES].decode("utf-8", "ignore"))
+            self._scan(
+                cleaned.encode("utf-8")[:SCAN_BATCH_BYTES].decode("utf-8", "ignore")
+            )
             return
         if self._pending_bytes + size > SCAN_BATCH_BYTES:
             self.flush()

@@ -66,7 +66,6 @@ def offline_worker_api():
     text_anonymization._build_detectors.cache_clear()
 
     from fastapi.testclient import TestClient
-
     from main import app
 
     try:
@@ -165,7 +164,15 @@ def test_api_route_removes_identity_and_keeps_medicine(offline_worker_api):
     ):
         assert identifier not in anonymized, f"{identifier!r} survived"
 
-    for clinical in ("Parkinson", "Metformin", "500", "HbA1c", "7.4", "Creatinine", "CT"):
+    for clinical in (
+        "Parkinson",
+        "Metformin",
+        "500",
+        "HbA1c",
+        "7.4",
+        "Creatinine",
+        "CT",
+    ):
         assert clinical in anonymized, f"{clinical!r} was destroyed"
 
     # Safe Harbor aggregation, applied by the deterministic age rule.
@@ -235,9 +242,7 @@ def test_worker_failure_blocks_rather_than_returning_no_findings(monkeypatch):
         def detect(self, detector, text):
             raise LocalModelError("model_worker_timeout", 503)
 
-    monkeypatch.setattr(
-        "services.model_client.get_client", lambda: DeadClient()
-    )
+    monkeypatch.setattr("services.model_client.get_client", lambda: DeadClient())
 
     with pytest.raises(LocalModelError) as exc:
         RemoteModelDetector("stanford", "stanford_deidentifier").detect("Patient X.")

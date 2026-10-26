@@ -29,8 +29,7 @@ from services.local_model_detectors import LocalModelError  # noqa: E402
 from services.model_client import ModelWorkerClient  # noqa: E402
 
 #: A stand-in worker. `behaviour` decides how it misbehaves after the banner.
-FAKE_WORKER = textwrap.dedent(
-    '''
+FAKE_WORKER = textwrap.dedent("""
     import json, sys, time
 
     behaviour = sys.argv[1]
@@ -79,8 +78,7 @@ FAKE_WORKER = textwrap.dedent(
             }],
         }) + "\\n")
         sys.stdout.flush()
-    '''
-).strip()
+    """).strip()
 
 
 @pytest.fixture
@@ -95,9 +93,7 @@ def fake_worker(tmp_path, monkeypatch):
         real_popen = subprocess.Popen
 
         def fake_popen(argv, **kwargs):
-            return real_popen(
-                [sys.executable, str(script), behaviour], **kwargs
-            )
+            return real_popen([sys.executable, str(script), behaviour], **kwargs)
 
         monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
         return ModelWorkerClient(python_executable=script)

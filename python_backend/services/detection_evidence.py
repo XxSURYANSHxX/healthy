@@ -59,10 +59,10 @@ EVIDENCE_MODEL_VERSION = "detection-evidence-v3"
 
 # -- evidence strength ------------------------------------------------------
 
-EVIDENCE_DETERMINISTIC = "deterministic"   # a structured pattern or age rule
-EVIDENCE_MODEL = "model"                   # a trained model proposed it
-EVIDENCE_CONTEXT = "context_rule"          # an explicit contextual construction
-EVIDENCE_HEURISTIC = "heuristic"           # capitalisation shape only
+EVIDENCE_DETERMINISTIC = "deterministic"  # a structured pattern or age rule
+EVIDENCE_MODEL = "model"  # a trained model proposed it
+EVIDENCE_CONTEXT = "context_rule"  # an explicit contextual construction
+EVIDENCE_HEURISTIC = "heuristic"  # capitalisation shape only
 
 #: Sources whose findings are exact matches on identifier syntax.
 _DETERMINISTIC_SOURCES = frozenset({SOURCE_STRUCTURED_PATTERN, SOURCE_AGE_RULE})
@@ -225,7 +225,9 @@ class EvidenceAssessment:
 def _context_says_person(text: str, start: int, end: int) -> bool:
     before = text[max(0, start - 48) : start]
     after = text[end : end + 48]
-    return bool(_PERSON_CONTEXT_BEFORE.search(before) or _PERSON_CONTEXT_AFTER.match(after))
+    return bool(
+        _PERSON_CONTEXT_BEFORE.search(before) or _PERSON_CONTEXT_AFTER.match(after)
+    )
 
 
 def _context_says_facility(text: str, start: int, end: int) -> bool:
@@ -332,9 +334,9 @@ def is_confirmed_clinical_marker(text: str) -> bool:
         return False
     if _CLINICAL_MARKER.match(candidate):
         return True
-    return is_unconditional_clinical_term(candidate) or contains_distinctive_clinical_token(
+    return is_unconditional_clinical_term(
         candidate
-    )
+    ) or contains_distinctive_clinical_token(candidate)
 
 
 def clinical_reading_strength(text: str, start: int, end: int) -> Tuple[str, str]:
@@ -393,8 +395,13 @@ def assess_finding(
     # confidence turns a diagnosis into one of the eighteen.
     if category in NON_IDENTIFIER_CATEGORIES:
         return EvidenceAssessment(
-            category, source, evidence, "clinical", "preserve",
-            "category_is_not_a_safe_harbor_identifier", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "clinical",
+            "preserve",
+            "category_is_not_a_safe_harbor_identifier",
+            agreeing_detectors,
         )
 
     # A single character carries no identity on its own - the "C" in "37.2°C"
@@ -407,8 +414,13 @@ def assess_finding(
         and not _context_says_person(text, start, end)
     ):
         return EvidenceAssessment(
-            category, source, evidence, "clinical", "preserve",
-            "single_character_span_carries_no_identity", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "clinical",
+            "preserve",
+            "single_character_span_carries_no_identity",
+            agreeing_detectors,
         )
 
     # Layer 1: exact structured identifiers always win. A deterministic source
@@ -416,25 +428,41 @@ def assess_finding(
     # these categories has to produce a span that looks like one.
     span = text[start:end]
     if evidence == EVIDENCE_DETERMINISTIC or (
-        category in EXACT_STRUCTURED_CATEGORIES and _has_structural_syntax(category, span)
+        category in EXACT_STRUCTURED_CATEGORIES
+        and _has_structural_syntax(category, span)
     ):
         return EvidenceAssessment(
-            category, source, evidence, "identifier", "redact",
-            "exact_structured_match", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "identifier",
+            "redact",
+            "exact_structured_match",
+            agreeing_detectors,
         )
 
     if is_relative_time_expression(category, span):
         return EvidenceAssessment(
-            category, source, evidence, "clinical", "preserve",
-            "relative_time_expression_carries_no_date", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "clinical",
+            "preserve",
+            "relative_time_expression_carries_no_date",
+            agreeing_detectors,
         )
 
     if category not in NAME_SHAPED_CATEGORIES and category not in (
         EXACT_STRUCTURED_CATEGORIES
     ):
         return EvidenceAssessment(
-            category, source, evidence, "identifier", "redact",
-            "category_not_confusable_with_clinical_text", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "identifier",
+            "redact",
+            "category_not_confusable_with_clinical_text",
+            agreeing_detectors,
         )
 
     reading, rationale = clinical_reading_strength(text, start, end)
@@ -463,14 +491,24 @@ def assess_finding(
         # corroboration is for. And an unavailable parse arrives as None, not
         # False, so a tagger that failed exempts nothing.
         return EvidenceAssessment(
-            category, source, evidence, "clinical", "preserve",
-            "no_proper_noun_token_in_span", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "clinical",
+            "preserve",
+            "no_proper_noun_token_in_span",
+            agreeing_detectors,
         )
 
     if reading == "identifier":
         # Layer 4: contextual naming evidence beats a clinical reading.
         return EvidenceAssessment(
-            category, source, evidence, "identifier", "redact", rationale,
+            category,
+            source,
+            evidence,
+            "identifier",
+            "redact",
+            rationale,
             agreeing_detectors,
         )
 
@@ -479,11 +517,21 @@ def assess_finding(
         # overrule several detectors agreeing.
         if agreeing_detectors >= 2 and evidence == EVIDENCE_MODEL:
             return EvidenceAssessment(
-                category, source, evidence, "ambiguous", "review",
-                f"{rationale}_but_multiple_detectors_agree", agreeing_detectors,
+                category,
+                source,
+                evidence,
+                "ambiguous",
+                "review",
+                f"{rationale}_but_multiple_detectors_agree",
+                agreeing_detectors,
             )
         return EvidenceAssessment(
-            category, source, evidence, "clinical", "preserve", rationale,
+            category,
+            source,
+            evidence,
+            "clinical",
+            "preserve",
+            rationale,
             agreeing_detectors,
         )
 
@@ -492,8 +540,13 @@ def assess_finding(
         if agreeing_detectors >= 2:
             # Another detector saw the same span: no longer heuristic-only.
             return EvidenceAssessment(
-                category, source, evidence, "identifier", "redact",
-                "heuristic_supported_by_another_detector", agreeing_detectors,
+                category,
+                source,
+                evidence,
+                "identifier",
+                "redact",
+                "heuristic_supported_by_another_detector",
+                agreeing_detectors,
             )
         # Layer 5, resolved fail-closed. An unexplained name-shaped span is
         # replaced by a surrogate rather than escalated-and-left-in-place: the
@@ -509,15 +562,25 @@ def assess_finding(
         # ner_phi_detector._is_case_artifact), so spans reaching here are
         # name-shaped in a way sentence capitalisation does not explain.
         return EvidenceAssessment(
-            category, source, evidence, "identifier", "redact",
-            "heuristic_name_shape_without_explanation", agreeing_detectors,
+            category,
+            source,
+            evidence,
+            "identifier",
+            "redact",
+            "heuristic_name_shape_without_explanation",
+            agreeing_detectors,
         )
 
     # Layer 2: a model or context rule with no clinical reading is an
     # identifier. This is the ordinary path for a real name.
     return EvidenceAssessment(
-        category, source, evidence, "identifier", "redact",
-        "model_evidence_without_clinical_reading", agreeing_detectors,
+        category,
+        source,
+        evidence,
+        "identifier",
+        "redact",
+        "model_evidence_without_clinical_reading",
+        agreeing_detectors,
     )
 
 

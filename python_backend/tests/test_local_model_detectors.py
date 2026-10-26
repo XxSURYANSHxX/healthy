@@ -16,7 +16,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services import local_model_detectors as models  # noqa: E402
 from services.privacy_contracts import PhiEntity  # noqa: E402
 
-
 # --------------------------------------------------------------------------
 # Manifest pinning and configuration
 # --------------------------------------------------------------------------
@@ -139,18 +138,14 @@ def _entity(start, end, score, source="stanford_deidentifier", label="PATIENT"):
 
 
 def test_duplicate_span_from_two_chunks_collapses_to_highest_score():
-    merged = models.merge_chunk_entities(
-        [_entity(4, 9, 0.51), _entity(4, 9, 0.93)]
-    )
+    merged = models.merge_chunk_entities([_entity(4, 9, 0.51), _entity(4, 9, 0.93)])
 
     assert len(merged) == 1
     assert merged[0].score == 0.93
 
 
 def test_partially_overlapping_duplicates_keep_the_longest_span():
-    merged = models.merge_chunk_entities(
-        [_entity(4, 9, 0.9), _entity(4, 12, 0.6)]
-    )
+    merged = models.merge_chunk_entities([_entity(4, 9, 0.9), _entity(4, 12, 0.6)])
 
     assert [(item.start, item.end) for item in merged] == [(4, 12)]
 
@@ -196,9 +191,11 @@ def test_stanford_detector_batches_chunks_and_normalizes_labels(monkeypatch):
     def fake_pipeline(chunks, batch_size):
         calls.append((list(chunks), batch_size))
         return [
-            [{"entity_group": "PATIENT", "start": 1, "end": 3, "score": 0.4}]
-            if len(chunk) >= 3
-            else []
+            (
+                [{"entity_group": "PATIENT", "start": 1, "end": 3, "score": 0.4}]
+                if len(chunk) >= 3
+                else []
+            )
             for chunk in chunks
         ]
 
@@ -242,9 +239,19 @@ def test_unmapped_native_label_is_ignored_not_guessed(monkeypatch):
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [[
-            {"entity_group": "NOT_A_REAL_LABEL", "start": 0, "end": 2, "score": 0.9}
-        ] for _ in chunks]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [
+                    {
+                        "entity_group": "NOT_A_REAL_LABEL",
+                        "start": 0,
+                        "end": 2,
+                        "score": 0.9,
+                    }
+                ]
+                for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(chunk_size=100, chunk_overlap=10)
@@ -260,9 +267,11 @@ def test_gliner_detector_uses_batch_api_and_global_offsets(monkeypatch):
             assert batch_size == 4
             assert "person" in labels
             return [
-                [] if index == 0 else [
-                    {"label": "person", "start": 1, "end": 3, "score": 0.7}
-                ]
+                (
+                    []
+                    if index == 0
+                    else [{"label": "person", "start": 1, "end": 3, "score": 0.7}]
+                )
                 for index, _ in enumerate(chunks)
             ]
 
@@ -486,10 +495,12 @@ def test_out_of_range_offsets_fail_closed_instead_of_being_dropped(monkeypatch):
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [
-            [{"entity_group": "PATIENT", "start": 0, "end": 999, "score": 0.9}]
-            for _ in chunks
-        ]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [{"entity_group": "PATIENT", "start": 0, "end": 999, "score": 0.9}]
+                for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(chunk_size=100, chunk_overlap=10)
@@ -505,9 +516,11 @@ def test_missing_offsets_fail_closed(monkeypatch):
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [
-            [{"entity_group": "PATIENT", "score": 0.9}] for _ in chunks
-        ]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [{"entity_group": "PATIENT", "score": 0.9}] for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(chunk_size=100, chunk_overlap=10)
@@ -523,10 +536,12 @@ def test_candidates_below_the_redaction_threshold_are_still_redacted(monkeypatch
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [
-            [{"entity_group": "PATIENT", "start": 0, "end": 3, "score": 0.25}]
-            for _ in chunks
-        ]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [{"entity_group": "PATIENT", "start": 0, "end": 3, "score": 0.25}]
+                for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(
@@ -547,10 +562,12 @@ def test_sub_candidate_scores_are_excluded(monkeypatch):
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [
-            [{"entity_group": "PATIENT", "start": 0, "end": 3, "score": 0.05}]
-            for _ in chunks
-        ]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [{"entity_group": "PATIENT", "start": 0, "end": 3, "score": 0.05}]
+                for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(
@@ -682,10 +699,12 @@ def test_entities_carry_offsets_and_categories_not_text(monkeypatch):
     monkeypatch.setattr(
         models,
         "load_stanford_pipeline",
-        lambda: (lambda chunks, batch_size: [
-            [{"entity_group": "PATIENT", "start": 8, "end": 12, "score": 0.9}]
-            for _ in chunks
-        ]),
+        lambda: (
+            lambda chunks, batch_size: [
+                [{"entity_group": "PATIENT", "start": 8, "end": 12, "score": 0.9}]
+                for _ in chunks
+            ]
+        ),
     )
     detector = models.StanfordClinicalDetector(
         models.DetectorConfig(chunk_size=200, chunk_overlap=20)

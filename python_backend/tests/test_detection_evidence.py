@@ -95,9 +95,7 @@ NAMING_USE = [
         "Patient Wilson was admitted for observation.", "Wilson", id="patient_wilson"
     ),
     pytest.param("Dr Bell signed the discharge summary.", "Bell", id="dr_bell"),
-    pytest.param(
-        "Dr Cushing performed the procedure.", "Cushing", id="dr_cushing"
-    ),
+    pytest.param("Dr Cushing performed the procedure.", "Cushing", id="dr_cushing"),
     pytest.param(
         "Samples were sent to Blood Pressure Diagnostics Ltd.",
         "Blood Pressure Diagnostics",
@@ -274,7 +272,11 @@ def test_a_diagnosis_is_never_redacted_however_confident_the_model():
     """
     text = "Vital signs remained stable throughout the admission."
     assessment = assess_finding(
-        text, 0, len("Vital signs"), "MEDICAL_CONDITION", "gliner_multi_pii",
+        text,
+        0,
+        len("Vital signs"),
+        "MEDICAL_CONDITION",
+        "gliner_multi_pii",
         agreeing_detectors=2,
     )
 
@@ -290,7 +292,11 @@ def test_a_condition_prediction_protects_an_overlapping_name_guess():
     """
     text = "Fluid balance was maintained overnight."
     assessment = assess_finding(
-        text, 0, len("Fluid balance"), "PERSON", "gliner_multi_pii",
+        text,
+        0,
+        len("Fluid balance"),
+        "PERSON",
+        "gliner_multi_pii",
         clinical_support=True,
     )
 
@@ -302,7 +308,11 @@ def test_naming_context_still_wins_over_a_condition_prediction():
     text = "Reviewed by Dr Wilson this morning."
     start = text.index("Wilson")
     assessment = assess_finding(
-        text, start, start + len("Wilson"), "PERSON", "gliner_multi_pii",
+        text,
+        start,
+        start + len("Wilson"),
+        "PERSON",
+        "gliner_multi_pii",
         clinical_support=True,
     )
 
@@ -324,9 +334,7 @@ def test_a_single_character_is_not_replaced_with_a_patient_surrogate():
 def test_a_single_initial_in_a_naming_construction_is_still_redacted():
     text = "Seen by Dr R on the ward."
     start = text.index("R", text.index("Dr"))
-    assessment = assess_finding(
-        text, start, start + 1, "PERSON", "gliner_multi_pii"
-    )
+    assessment = assess_finding(text, start, start + 1, "PERSON", "gliner_multi_pii")
 
     assert assessment.action == "redact"
 
@@ -335,12 +343,16 @@ def test_a_single_initial_in_a_naming_construction_is_still_redacted():
 
 
 def test_a_span_with_no_proper_noun_is_not_replaced_with_a_surrogate():
-    """"nursing staff" identifies nobody, and one model saying PERSON is not
+    """ "nursing staff" identifies nobody, and one model saying PERSON is not
     enough to turn it into a patient surrogate."""
     text = "No adverse reaction was recorded by nursing staff."
     start = text.index("nursing staff")
     assessment = assess_finding(
-        text, start, start + len("nursing staff"), "PERSON", "gliner_multi_pii",
+        text,
+        start,
+        start + len("nursing staff"),
+        "PERSON",
+        "gliner_multi_pii",
         contains_proper_noun=False,
     )
 
@@ -353,7 +365,11 @@ def test_two_agreeing_detectors_outrank_the_absence_of_a_proper_noun():
     text = "No adverse reaction was recorded by nursing staff."
     start = text.index("nursing staff")
     assessment = assess_finding(
-        text, start, start + len("nursing staff"), "PERSON", "gliner_multi_pii",
+        text,
+        start,
+        start + len("nursing staff"),
+        "PERSON",
+        "gliner_multi_pii",
         agreeing_detectors=2,
         contains_proper_noun=False,
     )
@@ -370,8 +386,12 @@ def test_a_failed_parse_exempts_nothing():
     text = "Reviewed by Anand Rajagopalan on the ward."
     start = text.index("Anand")
     assessment = assess_finding(
-        text, start, start + len("Anand Rajagopalan"), "PERSON",
-        "gliner_multi_pii", contains_proper_noun=None,
+        text,
+        start,
+        start + len("Anand Rajagopalan"),
+        "PERSON",
+        "gliner_multi_pii",
+        contains_proper_noun=None,
     )
 
     assert assessment.action == "redact"
@@ -417,8 +437,11 @@ def test_a_real_structured_span_still_wins_at_layer_one():
     text = "Contact synthetic.person@example.invalid for notes."
     start = text.index("synthetic")
     assessment = assess_finding(
-        text, start, start + len("synthetic.person@example.invalid"),
-        "EMAIL_ADDRESS", "gliner_multi_pii",
+        text,
+        start,
+        start + len("synthetic.person@example.invalid"),
+        "EMAIL_ADDRESS",
+        "gliner_multi_pii",
     )
 
     assert assessment.action == "redact"
@@ -439,7 +462,7 @@ def test_a_deterministic_source_needs_no_further_proof():
 
 
 def test_a_relative_time_reference_is_not_a_date_element():
-    """"the morning round" carries no date and removing it buys no privacy."""
+    """ "the morning round" carries no date and removing it buys no privacy."""
     from services.detection_evidence import is_relative_time_expression
 
     assert is_relative_time_expression("DATE_TIME", "morning") is True

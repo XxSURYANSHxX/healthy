@@ -21,8 +21,9 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from services.privacy_contracts import PhiEntity
 
-
-MANIFEST_PATH = Path(__file__).resolve().parent.parent / "config" / "model_manifest.json"
+MANIFEST_PATH = (
+    Path(__file__).resolve().parent.parent / "config" / "model_manifest.json"
+)
 
 MODEL_MODE_ENV_VAR = "PHI_MODEL_MODE"
 MODE_OFFLINE = "offline"
@@ -149,9 +150,7 @@ def detector_config_from_env() -> DetectorConfig:
             ),
             batch_size=int(os.getenv("PHI_MODEL_BATCH_SIZE", DEFAULT_BATCH_SIZE)),
             inference_budget_seconds=float(
-                os.getenv(
-                    "PHI_MODEL_TIMEOUT_SECONDS", DEFAULT_INFERENCE_BUDGET_SECONDS
-                )
+                os.getenv("PHI_MODEL_TIMEOUT_SECONDS", DEFAULT_INFERENCE_BUDGET_SECONDS)
             ),
             calibrated=os.getenv("PHI_THRESHOLDS_CALIBRATED", "0") == "1",
         )
@@ -370,7 +369,11 @@ def _offline_snapshot(spec: ModelSpec) -> str:
             repo_id=spec.repo_id,
             revision=spec.revision,
             local_files_only=True,
-            **({"allow_patterns": list(spec.allow_patterns)} if spec.allow_patterns else {}),
+            **(
+                {"allow_patterns": list(spec.allow_patterns)}
+                if spec.allow_patterns
+                else {}
+            ),
         )
     except Exception as exc:
         raise LocalModelError("model_files_unavailable") from exc
@@ -468,8 +471,7 @@ def _normalized_entity(
 
 def _batches(items: Sequence[Any], batch_size: int) -> List[Sequence[Any]]:
     return [
-        items[index : index + batch_size]
-        for index in range(0, len(items), batch_size)
+        items[index : index + batch_size] for index in range(0, len(items), batch_size)
     ]
 
 

@@ -100,8 +100,12 @@ class UtilityVerdict:
         if self.passed:
             return ()
         reasons = [UTILITY_VALIDATION_FAILED]
-        reasons.extend(f"utility_below_minimum_{name}" for name in sorted(self.shortfalls))
-        reasons.extend(f"utility_metric_not_measured_{name}" for name in self.missing_metrics)
+        reasons.extend(
+            f"utility_below_minimum_{name}" for name in sorted(self.shortfalls)
+        )
+        reasons.extend(
+            f"utility_metric_not_measured_{name}" for name in self.missing_metrics
+        )
         return tuple(reasons)
 
     def to_public_dict(self) -> Dict[str, Any]:

@@ -192,7 +192,6 @@ def test_ingest_route_reports_validation_and_stays_blocked():
 @pytest.fixture(scope="module")
 def api_client():
     from fastapi.testclient import TestClient
-
     from main import app
 
     return TestClient(app)

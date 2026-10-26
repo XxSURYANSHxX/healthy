@@ -99,9 +99,7 @@ def test_strict_person_redaction_does_not_depend_on_study_salt():
 
 
 def test_surrogate_digest_includes_entity_type():
-    assert stable_hash(
-        "ABC12345", "study-a", entity_type="PATIENT_ID"
-    ) != stable_hash(
+    assert stable_hash("ABC12345", "study-a", entity_type="PATIENT_ID") != stable_hash(
         "ABC12345", "study-a", entity_type="MEDICAL_RECORD_NUMBER"
     )
 
@@ -496,3 +494,26 @@ def test_no_fake_entities_preserves_non_phi_text(monkeypatch):
 
     assert result["anonymized_text"] == text
     assert result["entity_count"] == 0
+
+
+def test_repeated_person_uses_same_surrogate_and_different_person_does_not():
+    text = (
+        "Rahul Sharma was examined by Dr. Amit Verma. "
+        "Rahul Sharma was discharged later."
+    )
+    result = anonymize_clinical_text(text, profile="research", study_salt="study-a")
+    tokens = re.findall(r"PERSON_[A-F0-9]{8}", result["anonymized_text"])
+
+    assert len(tokens) == 3
+    assert tokens[0] == tokens[2]
+    assert tokens[0] != tokens[1]
+    assert "Rahul Sharma" not in result["anonymized_text"]
+    assert "Amit Verma" not in result["anonymized_text"]
+
+
+def test_person_surrogate_changes_with_study_salt():
+    text = "Patient Rahul Sharma was admitted."
+    first = anonymize_clinical_text(text, profile="research", study_salt="study-a")
+    second = anonymize_clinical_text(text, profile="research", study_salt="study-b")
+
+    assert first["anonymized_text"] != second["anonymized_text"]

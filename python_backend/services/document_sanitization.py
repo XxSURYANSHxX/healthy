@@ -108,9 +108,7 @@ def _strip_xml(xmp: str) -> str:
 
 
 def _found_tokens(raw: bytes, tokens: Tuple[bytes, ...]) -> List[str]:
-    return sorted(
-        token.decode("ascii").lstrip("/") for token in tokens if token in raw
-    )
+    return sorted(token.decode("ascii").lstrip("/") for token in tokens if token in raw)
 
 
 def _merge_counts(target: Dict[str, int], addition: Dict[str, int]) -> None:

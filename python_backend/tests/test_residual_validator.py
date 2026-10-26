@@ -152,16 +152,14 @@ def test_deterministic_finding_in_original_text_always_blocks():
 def test_deterministic_finding_blocks_even_beside_a_surrogate():
     text = "PATIENT_001 can be reached on synthetic.person@example.org."
     provenance = TransformationProvenance(
-        regions=(
-            ReplacementRegion(0, len("PATIENT_001"), KIND_SURROGATE, "PERSON"),
-        )
+        regions=(ReplacementRegion(0, len("PATIENT_001"), KIND_SURROGATE, "PERSON"),)
     )
 
     assert residual_phi_categories(text, provenance)
 
 
 def test_partial_overlap_with_a_surrogate_does_not_excuse_a_finding():
-    """"Wholly inside" is the rule; touching a surrogate is not enough.
+    """ "Wholly inside" is the rule; touching a surrogate is not enough.
 
     The uncovered half of a straddling prediction is text the sanitizer did
     not write, and a missed identifier sitting immediately beside a surrogate
@@ -179,9 +177,7 @@ def test_partial_overlap_with_a_surrogate_does_not_excuse_a_finding():
 
     findings = residual_findings(text, provenance)
     straddling = [
-        f
-        for f in findings
-        if f["location_type"] == "spans_generated_and_original"
+        f for f in findings if f["location_type"] == "spans_generated_and_original"
     ]
 
     for finding in straddling:
@@ -223,9 +219,7 @@ def test_recorded_region_that_no_longer_holds_its_token_is_malformed():
 def test_well_formed_placeholders_are_not_malformed():
     findings = residual_findings("Value <REDACTED_DATE> recorded at intake.")
 
-    assert not [
-        f for f in findings if f["classification"] == CLASSIFICATION_MALFORMED
-    ]
+    assert not [f for f in findings if f["classification"] == CLASSIFICATION_MALFORMED]
 
 
 # -- the validator is still connected --------------------------------------

@@ -556,7 +556,6 @@ def test_wsi_ingestion_stays_blocked():
 @pytest.fixture(scope="module")
 def api_client():
     from fastapi.testclient import TestClient
-
     from main import app
 
     return TestClient(app)
@@ -568,11 +567,13 @@ def test_image_endpoint_blocks_instead_of_streaming_when_ocr_is_unavailable(
     import main
 
     monkeypatch.setattr(
-        main, "redact_raster_bytes", lambda content, profile="strict": (
+        main,
+        "redact_raster_bytes",
+        lambda content, profile="strict": (
             raster.redact_raster_bytes(
                 content, profile=profile, ocr_backend=UnavailableOCRBackend()
             )
-        )
+        ),
     )
 
     response = api_client.post(
@@ -587,7 +588,10 @@ def test_image_endpoint_blocks_instead_of_streaming_when_ocr_is_unavailable(
     assert response.headers["content-type"].startswith("application/json")
 
 
-def test_image_endpoint_streams_only_a_verified_redaction(api_client):
+def test_image_endpoint_streams_only_a_verified_redaction(api_client, monkeypatch):
+    # This fixture has no burned-in text. Exercise the real writer and verifier
+    # without depending on the host's Tesseract installation.
+    monkeypatch.setattr(raster, "get_default_ocr_backend", lambda: FakeOCRBackend([]))
     response = api_client.post(
         "/anonymize_image",
         files={"file": ("scan.png", BytesIO(_png()), "image/png")},
@@ -610,7 +614,9 @@ def test_image_endpoint_rejects_unsupported_media_types(api_client):
 def test_image_endpoint_never_echoes_content_in_errors(api_client):
     response = api_client.post(
         "/anonymize_image",
-        files={"file": ("scan.png", BytesIO(b"Jordan Fictional not an image"), "image/png")},
+        files={
+            "file": ("scan.png", BytesIO(b"Jordan Fictional not an image"), "image/png")
+        },
     )
 
     assert "Jordan Fictional" not in response.text

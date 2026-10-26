@@ -102,7 +102,9 @@ def measure_text_utility(
     return {
         "clinical_terms_in_input": len(original_clinical),
         "clinical_terms_preserved": clinical_preserved,
-        "clinical_term_preservation": _ratio(clinical_preserved, len(original_clinical)),
+        "clinical_term_preservation": _ratio(
+            clinical_preserved, len(original_clinical)
+        ),
         "content_tokens_in_input": len(original_content),
         "content_tokens_preserved": content_preserved,
         "content_token_preservation": _ratio(content_preserved, len(original_content)),

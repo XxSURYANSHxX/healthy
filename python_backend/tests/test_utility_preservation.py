@@ -64,13 +64,30 @@ def _anonymize(text, profile="strict"):
 @pytest.mark.parametrize(
     "term",
     [
-        "Parkinson", "Alzheimer", "Crohn", "Bell", "Graves",   # diagnoses
-        "Metformin", "Atorvastatin",                            # medications
-        "500", "40", "mg",                                      # dosages
-        "HbA1c", "7.2", "Creatinine", "1.1", "Troponin",        # lab values
-        "128/76", "mmHg", "72", "bpm",                          # measurements
-        "CT", "MRI",                                            # modalities
-        "abdomen", "lumbar", "spine",                           # anatomy
+        "Parkinson",
+        "Alzheimer",
+        "Crohn",
+        "Bell",
+        "Graves",  # diagnoses
+        "Metformin",
+        "Atorvastatin",  # medications
+        "500",
+        "40",
+        "mg",  # dosages
+        "HbA1c",
+        "7.2",
+        "Creatinine",
+        "1.1",
+        "Troponin",  # lab values
+        "128/76",
+        "mmHg",
+        "72",
+        "bpm",  # measurements
+        "CT",
+        "MRI",  # modalities
+        "abdomen",
+        "lumbar",
+        "spine",  # anatomy
     ],
 )
 def test_clinical_content_survives_anonymization(term):
@@ -300,7 +317,9 @@ def test_utility_failure_does_not_claim_successful_completion():
             "review_required_reasons": [],
             "utility_verdict": {
                 "passed": False,
-                "shortfalls": {"clinical_term_preservation": {"measured": 0.1, "required": 0.9}},
+                "shortfalls": {
+                    "clinical_term_preservation": {"measured": 0.1, "required": 0.9}
+                },
                 "missing_metrics": [],
             },
             "detected_entities": {},
@@ -399,7 +418,14 @@ def test_utility_measure_detects_destroyed_clinical_content():
 
 def test_utility_contract_is_versioned_for_every_modality():
     for modality in (
-        "text", "csv", "pdf", "workbook", "dicom", "nifti", "wsi", "raster"
+        "text",
+        "csv",
+        "pdf",
+        "workbook",
+        "dicom",
+        "nifti",
+        "wsi",
+        "raster",
     ):
         contract = contract_for(modality)
         assert contract is not None, modality

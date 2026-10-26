@@ -29,7 +29,6 @@ from services.transformation_manifest import (  # noqa: E402
     component_versions,
 )
 
-
 # ---------------------------------------------------------------------------
 # CSV
 # ---------------------------------------------------------------------------
@@ -83,9 +82,7 @@ def test_csv_measurement_carries_no_cell_values():
 
 
 def test_suppressed_rows_are_counted_not_hidden():
-    metrics = mu.measure_csv_utility(
-        ["age"], _rows(10), ["age"], _rows(4)
-    )
+    metrics = mu.measure_csv_utility(["age"], _rows(10), ["age"], _rows(4))
 
     assert metrics["rows_suppressed"] == 6
     assert metrics["row_retention"] == 0.4
@@ -220,7 +217,6 @@ def test_dicom_pipeline_measures_geometry_and_stays_blocked():
     pytest.importorskip("pydicom")
     from pydicom.dataset import FileDataset, FileMetaDataset
     from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage
-
     from services.dicom_anonymization import anonymize_dicom_file_bytes
 
     meta = FileMetaDataset()
@@ -361,9 +357,8 @@ def test_component_versions_never_report_an_empty_configuration():
 
 
 def test_every_ingested_modality_receives_a_manifest():
-    from fastapi.testclient import TestClient
-
     import main
+    from fastapi.testclient import TestClient
 
     client = TestClient(main.app)
     response = client.post(

@@ -39,3 +39,6 @@ httpx<0.28.0
 
 # Neuroimaging support for NIfTI files
 nibabel
+
+# Workbook inspection and sanitization are runtime paths, not analytics extras.
+openpyxl==3.1.5

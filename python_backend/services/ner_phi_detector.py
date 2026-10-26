@@ -123,8 +123,15 @@ def _context_matcher(model_name: str) -> Any:
                     {
                         "LOWER": {
                             "IN": [
-                                "dr", "dr.", "mr", "mr.", "mrs", "mrs.",
-                                "ms", "ms.", "professor",
+                                "dr",
+                                "dr.",
+                                "mr",
+                                "mr.",
+                                "mrs",
+                                "mrs.",
+                                "ms",
+                                "ms.",
+                                "professor",
                             ]
                         }
                     },
@@ -329,8 +336,10 @@ def _is_case_artifact(doc: Any, nlp: Any, start: int, end: int) -> bool:
         # Scanner - that a line-opening label is.
         opens_line = preceding.rstrip(_HORIZONTAL_SPACE).endswith(_LINE_BREAKS)
         stripped = preceding.rstrip()
-        if not opens_line and stripped and (
-            stripped[-1] not in _LINE_OPENING_PUNCTUATION
+        if (
+            not opens_line
+            and stripped
+            and (stripped[-1] not in _LINE_OPENING_PUNCTUATION)
         ):
             return False
 
