@@ -68,6 +68,7 @@ from services.privacy_profiles import (
 )
 from services.request_deadline import (
     RequestDeadlineExceeded,
+    RequestCancelled,
 )
 from services.request_deadline import check as _deadline_check
 from services.residual_identifier_scan import date_fragments, foreign_token_entities
@@ -283,6 +284,28 @@ _DECISION_SUMMARIES: ContextVar[Optional[Dict[str, Dict[str, Any]]]] = ContextVa
 )
 
 
+_DEFER_RESIDUAL: ContextVar[bool] = ContextVar("phi_defer_residual", default=False)
+_FOREIGN_TOKENS: ContextVar[bool] = ContextVar("phi_foreign_tokens", default=False)
+
+
+@contextmanager
+def deferred_residual(defer: bool = True) -> Iterator[None]:
+    token = _DEFER_RESIDUAL.set(defer)
+    try:
+        yield
+    finally:
+        _DEFER_RESIDUAL.reset(token)
+
+
+@contextmanager
+def replacing_foreign_tokens(enabled: bool = True) -> Iterator[None]:
+    token = _FOREIGN_TOKENS.set(enabled)
+    try:
+        yield
+    finally:
+        _FOREIGN_TOKENS.reset(token)
+
+
 def occurrence_summary(pass_kind: str) -> Dict[str, Any]:
     """Value-free counts of this call's occurrence decisions for one pass."""
     holder = _DECISION_SUMMARIES.get()
@@ -494,6 +517,8 @@ def _detect_entities(
         raise NerPhiDetectionError(exc.error_code, exc.status_code) from exc
     except NerPhiDetectionError:
         raise
+    except RequestCancelled:
+        raise
     except RequestDeadlineExceeded as exc:
         # Out of time blocks exactly as a model failure does. Keeping its own
         # code makes an over-long request distinguishable from a broken model
@@ -539,6 +564,16 @@ def _detect_entities(
         )
         # A token shaped like the sanitizer's own, in text it has not written yet,
         # is the document's: it is replaced, not left for a model to claim.
+    if pass_kind == PASS_FIRST and _FOREIGN_TOKENS.get():
+        from services.residual_identifier_scan import foreign_token_entities
+
+        detected.extend(
+            entity
+            for entity in foreign_token_entities(text)
+            if not any(
+                low < entity.end and entity.start < high for low, high in deterministic
+            )
+        )
     log = DecisionLog()
     token = _DECISIONS.set(log)
     try:
@@ -1750,7 +1785,11 @@ def _anonymize_clinical_text_in_scope(
     # beneath this one. Its cost must not be added to anonymize.detect_pass1:
     # the two passes run over different text.
     with _timed_stage("anonymize.residual_validation"):
-        second_pass = residual_findings(anonymized_text, provenance)
+        second_pass = (
+            []
+            if _DEFER_RESIDUAL.get()
+            else residual_findings(anonymized_text, provenance)
+        )
 
     result = {
         "anonymization_status": "completed",

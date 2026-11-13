@@ -106,6 +106,17 @@ FAKE_WORKER = textwrap.dedent("""
             say({"id": request.get("id"), "ok": True, "ready": True, "pid": os.getpid(),
                  "load_count": 1})
             continue
+        if request.get("op") == "detect_many":
+            results = [{
+                "index": item["index"], "surface": item["surface"],
+                "entities": [{"entity_type": "PERSON",
+                              "start": len(item["text"]) % 3, "end": 4,
+                              "source": "fake_detector", "score": 0.9}],
+            } for item in request["items"]]
+            if behaviour == "bad_batch_mapping":
+                results.reverse()
+            say({"id": request.get("id"), "ok": True, "results": results})
+            continue
         say({
             "id": request.get("id"),
             "ok": True,
@@ -627,3 +638,64 @@ def test_protocol_failure_revokes_readiness_before_supervisor_runs(monkeypatch):
     assert client._protocol_failure(7, "model_response_malformed") is False
     assert not client.is_ready()
     client._process = None
+
+
+def test_independent_worker_array_maps_each_surface_and_matches_isolated(fake_worker):
+    from services import request_deadline
+
+    client = fake_worker("ok")
+    items = [
+        {"surface": "sheet:A2", "text": "Invented Jane"},
+        {"surface": "sheet:B2", "text": "Different Jane note"},
+    ]
+    try:
+        isolated = [client.detect("fake", item["text"]) for item in items]
+        request_deadline.start(30.0)
+        before = client.status().get("worker_detect_requests", 0)
+        assert client.detect_many("fake", items) == isolated
+        assert client.status()["worker_detect_requests"] == before + 1
+    finally:
+        request_deadline.clear()
+        client.stop()
+
+
+def test_independent_worker_array_mapping_mismatch_fails_atomically(fake_worker):
+    from services import request_deadline
+
+    client = fake_worker("bad_batch_mapping")
+    try:
+        request_deadline.start(30.0)
+        with pytest.raises(LocalModelError) as exc:
+            client.detect_many(
+                "fake",
+                [
+                    {"surface": "sheet:A2", "text": "Invented Jane"},
+                    {"surface": "sheet:B2", "text": "Different Jane note"},
+                ],
+            )
+        assert exc.value.error_code == "model_output_malformed"
+        assert request_deadline.model_evidence_cache() == {}
+    finally:
+        request_deadline.clear()
+        client.stop()
+
+
+def test_independent_worker_array_obeys_cancel_before_cache_hit(fake_worker):
+    from services import request_deadline
+
+    client = fake_worker("ok")
+    cancel = threading.Event()
+    binding = request_deadline.bind_job(cancel)
+    items = [{"surface": "sheet:A2", "text": "Invented Jane"}]
+    try:
+        request_deadline.start(30.0)
+        client.detect_many("fake", items)
+        before = client.status().get("worker_detect_requests", 0)
+        cancel.set()
+        with pytest.raises(request_deadline.RequestCancelled):
+            client.detect_many("fake", items)
+        assert client.status().get("worker_detect_requests", 0) == before
+    finally:
+        request_deadline.clear()
+        request_deadline.unbind_job(binding)
+        client.stop()

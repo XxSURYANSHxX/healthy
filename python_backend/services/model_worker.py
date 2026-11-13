@@ -59,6 +59,11 @@ WARMUP_TEXT = "The clinic reviewed the routine observation record and plan."
 MAX_REQUEST_BYTES = 512 * 1024
 
 
+MAX_BATCH_ITEMS = 2
+MAX_BATCH_BYTES = 128 * 1024
+MAX_BATCH_ESTIMATED_TOKENS = 8192
+
+
 def _configure_offline() -> None:
     cache = BACKEND_ROOT / ".model-cache"
     os.environ.setdefault("HF_HOME", str(cache))
@@ -248,7 +253,7 @@ class _Worker:
             return {"id": request_id, "ok": True, **self.status()}
         if op == "shutdown":
             return {"id": request_id, "ok": True, "shutdown": True}
-        if op != "detect":
+        if op not in {"detect", "detect_many"}:
             return {"id": request_id, "ok": False, "error_code": "unknown_operation"}
 
         if not self._ready:
@@ -262,18 +267,59 @@ class _Worker:
         if detector is None:
             return {"id": request_id, "ok": False, "error_code": "unknown_detector"}
 
-        text = request.get("text")
-        if not isinstance(text, str):
-            return {"id": request_id, "ok": False, "error_code": "invalid_request"}
-        if len(text.encode("utf-8")) > MAX_REQUEST_BYTES:
-            return {"id": request_id, "ok": False, "error_code": "request_too_large"}
+        items = None
+        if op == "detect_many":
+            items = request.get("items")
+            if not isinstance(items, list) or not 1 <= len(items) <= MAX_BATCH_ITEMS:
+                return {"id": request_id, "ok": False, "error_code": "invalid_request"}
+            if any(
+                not isinstance(item, dict)
+                or set(item) != {"index", "surface", "text"}
+                or item.get("index") != index
+                or not isinstance(item.get("surface"), str)
+                or len(item["surface"].encode("utf-8")) > 128
+                or not isinstance(item.get("text"), str)
+                for index, item in enumerate(items)
+            ):
+                return {"id": request_id, "ok": False, "error_code": "invalid_request"}
+            texts = [item["text"] for item in items]
+            sizes = [len(text.encode("utf-8")) for text in texts]
+            if (
+                sum(sizes) > MAX_BATCH_BYTES
+                or sum((size + 3) // 4 for size in sizes) > MAX_BATCH_ESTIMATED_TOKENS
+            ):
+                return {
+                    "id": request_id,
+                    "ok": False,
+                    "error_code": "request_too_large",
+                }
+            if not callable(getattr(detector, "detect_many", None)):
+                return {
+                    "id": request_id,
+                    "ok": False,
+                    "error_code": "batch_not_supported",
+                }
+        else:
+            text = request.get("text")
+            if not isinstance(text, str):
+                return {"id": request_id, "ok": False, "error_code": "invalid_request"}
+            if len(text.encode("utf-8")) > MAX_REQUEST_BYTES:
+                return {
+                    "id": request_id,
+                    "ok": False,
+                    "error_code": "request_too_large",
+                }
 
         from services import model_device
 
         started = time.perf_counter()
         degraded = False
         try:
-            entities = detector.detect(text)
+            entities = (
+                detector.detect_many(texts)
+                if items is not None
+                else detector.detect(text)
+            )
         except Exception as exc:
             code = getattr(exc, "error_code", "inference_failed")
             if code == model_device.ERROR_CUDA_OOM and self.device is not None:
@@ -285,22 +331,43 @@ class _Worker:
             detector = self._detectors[str(request.get("detector"))]
             degraded = True
             try:
-                entities = detector.detect(text)
+                entities = (
+                    detector.detect_many(texts)
+                    if items is not None
+                    else detector.detect(text)
+                )
             except Exception as retry:
                 return {
                     "id": request_id,
                     "ok": False,
                     "error_code": getattr(retry, "error_code", "inference_failed"),
                 }
-        return {
+        answer = {
             "id": request_id,
             "ok": True,
-            "entities": _entities_to_json(list(entities)),
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
             "device": self.device.selected if self.device is not None else "cpu",
             "degraded": degraded,
             "memory": self._memory(),
         }
+        if items is None:
+            answer["entities"] = _entities_to_json(list(entities))
+        else:
+            if len(entities) != len(items):
+                return {
+                    "id": request_id,
+                    "ok": False,
+                    "error_code": "model_output_malformed",
+                }
+            answer["results"] = [
+                {
+                    "index": item["index"],
+                    "surface": item["surface"],
+                    "entities": _entities_to_json(list(group)),
+                }
+                for item, group in zip(items, entities)
+            ]
+        return answer
 
     def _memory(self) -> Dict[str, Any]:
         """Current VRAM counters, so the parent's report never goes stale."""

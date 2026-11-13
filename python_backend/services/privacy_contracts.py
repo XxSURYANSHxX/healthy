@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Protocol, Tuple
@@ -118,3 +119,30 @@ def expert_determination_decision() -> ReleaseDecision:
         disposition=ReleaseDisposition.EXPERT_DETERMINATION_REQUIRED,
         reason_codes=("expert_determination_required",),
     )
+
+
+@dataclass(frozen=True)
+class StreamedArtifact:
+    """A sanitized file too large to hold in memory: its path, digest and size.
+
+    The digest was computed as the file was written and is proven again when
+    the file is stored; a release binds that digest exactly as it binds the
+    digest of in-memory bytes.
+    """
+
+    path: str = field(repr=False)
+    sha256: str
+    size: int
+    media_type: str
+    filename: str
+    validators: Tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.size) is not int
+            or self.size <= 0
+            or not re.fullmatch(r"[0-9a-f]{64}", self.sha256 or "")
+        ):
+            raise ValueError("sanitized artifact requires a positive size and SHA-256")
+        if not self.validators:
+            raise ValueError("sanitized artifact requires at least one validator")

@@ -41,7 +41,12 @@ from services.local_model_detectors import (
     LocalModelError,
 )
 from services.privacy_contracts import PhiEntity
-from services.request_deadline import ERROR_WORKER_TIMEOUT, budget_for
+from services.request_deadline import (
+    ERROR_WORKER_TIMEOUT,
+    budget_for,
+    MAX_MODEL_EVIDENCE_ENTRIES,
+    model_evidence_cache,
+)
 from services.request_deadline import remaining as request_remaining
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -520,6 +525,20 @@ class ModelWorkerClient:
                     self.stats.get("deadline_refusals", 0) + 1
                 )
             raise LocalModelError(ERROR_REQUEST_DEADLINE, 503)
+        cache = model_evidence_cache()
+        with self._lock:
+            generation = self._generation
+        key = (generation, detector, text)
+        if cache is not None and key in cache and self.is_ready():
+            with self._lock:
+                self.stats["detect_cache_hits"] = (
+                    self.stats.get("detect_cache_hits", 0) + 1
+                )
+            return list(cache[key])
+        with self._lock:
+            self.stats["worker_detect_requests"] = (
+                self.stats.get("worker_detect_requests", 0) + 1
+            )
         try:
             response = self._request(
                 {"op": "detect", "detector": detector, "text": text},
@@ -598,6 +617,15 @@ class ModelWorkerClient:
                     {"selected": "cpu", "acceleration_active": False, "degraded": True}
                 )
                 self.runtime["device"] = device
+        if (
+            cache is not None
+            and len(text.encode("utf-8")) <= 16 * 1024
+            and len(cache) < MAX_MODEL_EVIDENCE_ENTRIES
+        ):
+            with self._lock:
+                same_generation = generation == self._generation
+            if same_generation:
+                cache[key] = tuple(entities)
         return entities
 
     def _request(
@@ -703,6 +731,181 @@ class ModelWorkerClient:
                 **self.stats,
                 "runtime": dict(self.runtime),
             }
+
+    def detect_many(
+        self, detector: str, items: List[Dict[str, str]]
+    ) -> List[List[PhiEntity]]:
+        """One CUDA request for up to two independently indexed surfaces.
+
+        Only successful, exactly mapped per-input proposals enter the
+        file-local evidence cache. A failed or malformed batch returns no
+        partial result; the caller must hold the artifact.
+        """
+        if (
+            not isinstance(items, list)
+            or not 1 <= len(items) <= 2
+            or any(
+                not isinstance(item, dict)
+                or set(item) != {"surface", "text"}
+                or not isinstance(item["surface"], str)
+                or len(item["surface"].encode("utf-8")) > 128
+                or not isinstance(item["text"], str)
+                for item in items
+            )
+        ):
+            raise LocalModelError("invalid_batch_request", 500)
+        sizes = [len(item["text"].encode("utf-8")) for item in items]
+        if sum(sizes) > 128 * 1024 or sum((size + 3) // 4 for size in sizes) > 8192:
+            raise LocalModelError("request_too_large", 413)
+        with self._lock:
+            self.stats["detect_requests"] += len(items)
+            generation = self._generation
+        rpc_limit = request_timeout_seconds()
+        budget = budget_for("model_worker", rpc_limit, report_progress=False)
+        left = request_remaining()
+        if left is not None and left < MIN_CALL_SECONDS:
+            with self._lock:
+                self.stats["deadline_refusals"] = (
+                    self.stats.get("deadline_refusals", 0) + 1
+                )
+            raise LocalModelError(ERROR_REQUEST_DEADLINE, 503)
+        cache = model_evidence_cache()
+        answer: List[Optional[List[PhiEntity]]] = [None] * len(items)
+        missing: List[int] = []
+        for index, item in enumerate(items):
+            key = (generation, detector, item["text"])
+            if cache is not None and key in cache and self.is_ready():
+                answer[index] = list(cache[key])
+                with self._lock:
+                    self.stats["detect_cache_hits"] = (
+                        self.stats.get("detect_cache_hits", 0) + 1
+                    )
+            else:
+                missing.append(index)
+        if missing:
+            request_items = [
+                {
+                    "index": ordinal,
+                    "surface": items[index]["surface"],
+                    "text": items[index]["text"],
+                }
+                for ordinal, index in enumerate(missing)
+            ]
+            with self._lock:
+                self.stats["worker_detect_requests"] = (
+                    self.stats.get("worker_detect_requests", 0) + 1
+                )
+                self.stats["worker_detect_items"] = self.stats.get(
+                    "worker_detect_items", 0
+                ) + len(missing)
+            try:
+                response = self._request(
+                    {"op": "detect_many", "detector": detector, "items": request_items},
+                    timeout=rpc_limit if budget is None else budget,
+                    worker_limit=rpc_limit,
+                )
+            except LocalModelError as exc:
+                left = request_remaining()
+                if (
+                    exc.error_code == ERROR_WORKER_TIMEOUT
+                    and left is not None
+                    and left < MIN_CALL_SECONDS
+                ):
+                    raise LocalModelError(ERROR_REQUEST_DEADLINE, 503) from exc
+                raise
+            if response.get("ok") is not True:
+                raise LocalModelError(_safe_error_code(response.get("error_code")), 503)
+            results = response.get("results")
+            if not isinstance(results, list) or len(results) != len(request_items):
+                self._protocol_failure(self._generation, "model_output_malformed")
+                raise LocalModelError("model_output_malformed", 503)
+            decoded: List[List[PhiEntity]] = []
+            try:
+                for requested, returned in zip(request_items, results):
+                    if (
+                        not isinstance(returned, dict)
+                        or type(returned.get("index")) is not int
+                        or returned.get("index") != requested["index"]
+                        or returned.get("surface") != requested["surface"]
+                        or not isinstance(returned.get("entities"), list)
+                    ):
+                        raise ValueError("mapping mismatch")
+                    group = []
+                    for entity in returned["entities"]:
+                        if not isinstance(entity, dict):
+                            raise ValueError("invalid entity")
+                        start, end = entity["start"], entity["end"]
+                        if (
+                            type(start) is not int
+                            or type(end) is not int
+                            or not 0 <= start < end <= len(requested["text"])
+                        ):
+                            raise ValueError("span crosses input")
+                        if (
+                            not isinstance(entity["entity_type"], str)
+                            or not entity["entity_type"]
+                            or not isinstance(entity["source"], str)
+                            or not entity["source"]
+                        ):
+                            raise ValueError("invalid entity")
+                        score = entity.get("score")
+                        if score is not None and (
+                            type(score) not in (int, float)
+                            or not math.isfinite(score)
+                            or not 0 <= score <= 1
+                        ):
+                            raise ValueError("invalid score")
+                        group.append(
+                            PhiEntity(
+                                entity["entity_type"],
+                                start,
+                                end,
+                                entity["source"],
+                                score,
+                                entity.get("original_label"),
+                            )
+                        )
+                    decoded.append(group)
+            except (KeyError, TypeError, ValueError):
+                self._protocol_failure(self._generation, "model_output_malformed")
+                raise LocalModelError("model_output_malformed", 503) from None
+            memory = response.get("memory")
+            if isinstance(memory, dict) and memory:
+                with self._lock:
+                    device = dict(self.runtime.get("device") or {})
+                    device.update(
+                        {
+                            key: value
+                            for key, value in memory.items()
+                            if key.endswith("_vram_bytes")
+                        }
+                    )
+                    self.runtime["device"] = device
+            if response.get("degraded"):
+                with self._lock:
+                    device = dict(self.runtime.get("device") or {})
+                    device.update(
+                        {
+                            "selected": "cpu",
+                            "acceleration_active": False,
+                            "degraded": True,
+                        }
+                    )
+                    self.runtime["device"] = device
+            with self._lock:
+                same_generation = generation == self._generation
+            for index, group in zip(missing, decoded):
+                answer[index] = group
+                if (
+                    cache is not None
+                    and same_generation
+                    and len(items[index]["text"].encode("utf-8")) <= 16 * 1024
+                    and len(cache) < MAX_MODEL_EVIDENCE_ENTRIES
+                ):
+                    cache[(generation, detector, items[index]["text"])] = tuple(group)
+        if any(group is None for group in answer):
+            raise LocalModelError("model_output_malformed", 503)
+        return [list(group) for group in answer if group is not None]
 
 
 def _safe_error_code(value: Any) -> str:

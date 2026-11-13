@@ -674,6 +674,38 @@ class _ChunkedModelDetector:
                     entities.append(entity)
         return merge_chunk_entities(entities)
 
+    def detect_many(self, texts: Sequence[str]) -> List[List[PhiEntity]]:
+        """Infer separate strings in one bounded GPU stream, never joining them.
+
+        Offsets and overlap merging are local to each input. _run_batched uses
+        the existing configured CUDA batch size (two in qualification), and
+        a failure returns no partial per-input result.
+        """
+        all_chunks: List[Tuple[int, str]] = []
+        owners: List[int] = []
+        for owner, text in enumerate(texts):
+            chunks = overlapping_chunks(
+                text, self.config.chunk_size, self.config.chunk_overlap
+            )
+            all_chunks.extend(chunks)
+            owners.extend([owner] * len(chunks))
+        if not all_chunks:
+            return [[] for _ in texts]
+        predictions = _run_batched(
+            all_chunks, self.config, self._infer, self.failure_code
+        )
+        grouped: List[List[PhiEntity]] = [[] for _ in texts]
+        for owner, (offset, chunk), chunk_predictions in zip(
+            owners, all_chunks, predictions
+        ):
+            for raw in chunk_predictions:
+                entity = _normalized_entity(
+                    raw, self.label_map, offset, len(chunk), self.source, self.config
+                )
+                if entity is not None:
+                    grouped[owner].append(entity)
+        return [merge_chunk_entities(entities) for entities in grouped]
+
 
 class StanfordClinicalDetector(_ChunkedModelDetector):
     source = SOURCE_STANFORD

@@ -16,7 +16,12 @@ from services.phi_detection import (
     SOURCE_STRICT_PROPER_NOUN,
     DetectedEntity,
 )
-from services.request_deadline import check as check_request_deadline
+from services.request_deadline import (
+    check as check_request_deadline,
+    parse_slot,
+    model_evidence_cache,
+    MAX_MODEL_EVIDENCE_ENTRIES,
+)
 
 DEFAULT_NER_MODEL = "en_core_web_sm"
 NER_MODEL_ENV_VAR = "PHI_NER_MODEL"
@@ -254,6 +259,30 @@ def _context_name_end(rule_name: str, doc: Any, start: int, end: int) -> int:
     return name_end
 
 
+_PARSE_HOLD_CHARS = 65536
+
+
+def _parse(nlp, model_name: str, text: str):
+    """One spaCy parse of ``text``, reused by whoever asks next for the same text.
+
+    The detector, the proper-noun evidence and the opening-modifier evidence all
+    read the same window in a row, and each parsed it again. The last parse is
+    kept in a file-local slot - one entry, replaced by the next text,
+    gone with the file's deadline - so a text is parsed once per pass. It is
+    never shared between files and never outlives its request.
+    """
+    slot = parse_slot()
+    if slot is None or len(text) > _PARSE_HOLD_CHARS:
+        return nlp(text)
+    held = slot.get(model_name)
+    if held is not None and held[0] == text:
+        return held[1]
+    doc = nlp(text)
+    slot.clear()  # one slot: the next text replaces this one
+    slot[model_name] = (text, doc)
+    return doc
+
+
 def noun_evidence(text: str, model_name: str):
     """(proper-noun ranges, opening-modifier ranges) from one parse, or None.
 
@@ -266,7 +295,7 @@ def noun_evidence(text: str, model_name: str):
     """
     try:
         nlp = load_spacy_pipeline(model_name)
-        doc = nlp(text)
+        doc = _parse(nlp, model_name, text)
     except Exception:
         return None
     proper = tuple(
@@ -717,9 +746,14 @@ class SpacyNerPhiDetector:
 
     def detect(self, text: str) -> List[DetectedEntity]:
         check_request_deadline()
+        check_request_deadline()
+        cache = model_evidence_cache()
+        key = ("spacy_ner_v1", self.model_name, self.high_recall_proper_nouns, text)
+        if cache is not None and key in cache:
+            return list(cache[key])
         nlp = load_spacy_pipeline(self.model_name)
         try:
-            doc = nlp(text)
+            doc = _parse(nlp, self.model_name, text)
         except Exception as exc:
             raise NerPhiDetectionError("ner_inference_failed", status_code=500) from exc
 
@@ -765,4 +799,10 @@ class SpacyNerPhiDetector:
         if self.high_recall_proper_nouns:
             entities.extend(_strict_proper_noun_entities(doc, entities, nlp))
 
+        if (
+            cache is not None
+            and len(text) <= 8192
+            and len(cache) < MAX_MODEL_EVIDENCE_ENTRIES
+        ):
+            cache[key] = tuple(entities)
         return entities

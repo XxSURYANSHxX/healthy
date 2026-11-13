@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import threading
 
 import pytest
 
@@ -17,7 +18,7 @@ def surrogate_count(text):
     return len(SURROGATE_RE.findall(text))
 
 
-from services import ner_phi_detector  # noqa: E402
+from services import ner_phi_detector, request_deadline  # noqa: E402
 from services.ingestion import anonymize_text  # noqa: E402
 from services.ner_phi_detector import (  # noqa: E402
     DEFAULT_NER_MODEL,
@@ -514,3 +515,93 @@ def test_person_surrogate_changes_with_study_salt():
     second = anonymize_clinical_text(text, profile="research", study_salt="study-b")
 
     assert first["anonymized_text"] != second["anonymized_text"]
+
+
+def test_spacy_proposals_cached_only_for_exact_input_within_one_file(monkeypatch):
+    calls = []
+
+    class FakeDoc:
+        ents = ()
+
+    class FakeNlp:
+        def __call__(self, text):
+            calls.append(text)
+            return FakeDoc()
+
+    monkeypatch.setattr(
+        ner_phi_detector, "load_spacy_pipeline", lambda _name: FakeNlp()
+    )
+    monkeypatch.setattr(
+        ner_phi_detector, "_context_matcher", lambda _name: lambda _doc: ()
+    )
+    detector = ner_phi_detector.SpacyNerPhiDetector("test_model")
+    request_deadline.start(seconds=60)
+    try:
+        assert detector.detect("plain text") == []
+        assert detector.detect("plain text") == []
+        assert detector.detect("different text") == []
+        assert calls == ["plain text", "different text"]
+        assert len(request_deadline.model_evidence_cache()) == 2
+    finally:
+        request_deadline.clear()
+
+    request_deadline.start(seconds=60)
+    try:
+        assert detector.detect("plain text") == []
+        assert calls == ["plain text", "different text", "plain text"]
+    finally:
+        request_deadline.clear()
+
+
+def test_spacy_proposal_cache_remains_bounded(monkeypatch):
+    calls = []
+
+    class FakeDoc:
+        ents = ()
+
+    monkeypatch.setattr(ner_phi_detector, "MAX_MODEL_EVIDENCE_ENTRIES", 2)
+    monkeypatch.setattr(
+        ner_phi_detector,
+        "load_spacy_pipeline",
+        lambda _name: lambda text: calls.append(text) or FakeDoc(),
+    )
+    monkeypatch.setattr(
+        ner_phi_detector, "_context_matcher", lambda _name: lambda _doc: ()
+    )
+    detector = ner_phi_detector.SpacyNerPhiDetector("test_model")
+    request_deadline.start(seconds=60)
+    try:
+        for text in ("first", "second", "third", "third"):
+            assert detector.detect(text) == []
+        # The proposal ledger stops at its bound: "third" was never retained.
+        assert len(request_deadline.model_evidence_cache()) == 2
+        # The parse slot is separate and holds only the latest text, so the same
+        # text asked for twice in a row is parsed once, and nothing earlier is kept.
+        assert calls == ["first", "second", "third"]
+        assert len(request_deadline.parse_slot()) == 1
+    finally:
+        request_deadline.clear()
+    assert request_deadline.parse_slot() is None
+
+
+def test_spacy_cache_checks_deadline_without_per_cell_progress_writes(monkeypatch):
+    class FakeDoc:
+        ents = ()
+
+    monkeypatch.setattr(
+        ner_phi_detector, "load_spacy_pipeline", lambda _name: lambda _text: FakeDoc()
+    )
+    monkeypatch.setattr(
+        ner_phi_detector, "_context_matcher", lambda _name: lambda _doc: ()
+    )
+    progress = []
+    binding = request_deadline.bind_job(threading.Event(), progress.append)
+    request_deadline.start(seconds=60)
+    try:
+        detector = ner_phi_detector.SpacyNerPhiDetector("test_model")
+        assert detector.detect("plain text") == []
+        assert detector.detect("plain text") == []
+        assert progress == []
+    finally:
+        request_deadline.clear()
+        request_deadline.unbind_job(binding)

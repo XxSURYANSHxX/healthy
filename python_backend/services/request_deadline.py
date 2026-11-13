@@ -25,11 +25,13 @@ model failure already gets.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import os
+import threading
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 #: Server-side only. Never populated from request data.
 DEADLINE_ENV_VAR = "PHI_REQUEST_DEADLINE_SECONDS"
@@ -58,6 +60,8 @@ MAX_DEADLINE_SECONDS = 1800.0
 ERROR_REQUEST_TIMEOUT = "request_deadline_exceeded"
 ERROR_QUEUE_TIMEOUT = "request_queue_timeout"
 ERROR_WORKER_TIMEOUT = "model_worker_timeout"
+#: A background job cancelled by the requester that started it.
+ERROR_CANCELLED = "request_cancelled"
 
 
 class DeadlineConfigurationError(ValueError):
@@ -77,6 +81,19 @@ class RequestDeadlineExceeded(RuntimeError):
         #: Coarse stage name for metrics. Not returned to clients.
         self.stage = stage
         self.status_code = 503
+
+
+class RequestCancelled(RequestDeadlineExceeded):
+    """A background job was cancelled.
+
+    A subclass, so every path that already stops cleanly on an expired
+    deadline - returning no partial result and storing nothing - stops the same
+    way on cancellation.
+    """
+
+    def __init__(self, stage: str = ""):
+        super().__init__(stage=stage, error_code=ERROR_CANCELLED)
+        self.status_code = 409
 
 
 def configured_seconds() -> float:
@@ -118,6 +135,48 @@ _DEADLINE: contextvars.ContextVar[Optional[Deadline]] = contextvars.ContextVar(
     "phi_request_deadline", default=None
 )
 
+# Successful model proposals may be reused within one file, never across
+# files or jobs. The occurrence-specific tabular policy still runs afterward.
+_MODEL_EVIDENCE: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "phi_model_evidence", default=None
+)
+# A bounded file-local proposal ledger. The old 512-entry shared cap was
+# exhausted by spaCy and model proposals early in wide workbooks, so later
+# two-input prefetches were immediately repeated by the per-cell pass.
+# The worker subset is limited to 16 KiB per input; spaCy has a separate
+# 8,192-character limit. The shared count bound prevents unbounded growth.
+MAX_MODEL_EVIDENCE_ENTRIES = 2048
+
+# One slot holding the most recent parse of one text, so the detector and the
+# evidence model that read the same window in turn parse it once. It is not
+# part of the proposal ledger above and is not counted against its bound.
+_PARSE_SLOT: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "phi_parse_slot", default=None
+)
+
+
+@dataclass(frozen=True)
+class _JobBinding:
+    cancel: threading.Event
+    progress: Optional[Callable[[str], None]]
+
+
+#: Set only on the thread that runs a background job, never from request data.
+_JOB: contextvars.ContextVar[Optional[_JobBinding]] = contextvars.ContextVar(
+    "phi_ingest_job", default=None
+)
+
+
+def bind_job(
+    cancel: threading.Event, progress: Optional[Callable[[str], None]] = None
+) -> contextvars.Token:
+    """Make every checkpoint on this thread honour a job's cancellation and report its stage."""
+    return _JOB.set(_JobBinding(cancel, progress))
+
+
+def unbind_job(token: contextvars.Token) -> None:
+    _JOB.reset(token)
+
 
 def start(seconds: Optional[float] = None) -> Deadline:
     """Begin the one deadline for this request.
@@ -129,11 +188,25 @@ def start(seconds: Optional[float] = None) -> Deadline:
     total = configured_seconds() if seconds is None else float(seconds)
     deadline = Deadline(expires_at=time.monotonic() + total, total_seconds=total)
     _DEADLINE.set(deadline)
+    _MODEL_EVIDENCE.set({})
+    _PARSE_SLOT.set({})
     return deadline
 
 
 def clear() -> None:
     _DEADLINE.set(None)
+    _MODEL_EVIDENCE.set(None)
+    _PARSE_SLOT.set(None)
+
+
+def model_evidence_cache() -> Optional[dict]:
+    """Transient successful detector proposals for this file's deadline."""
+    return _MODEL_EVIDENCE.get()
+
+
+def parse_slot() -> Optional[dict]:
+    """The one-entry parse slot for this file's deadline, or None outside one."""
+    return _PARSE_SLOT.get()
 
 
 def current() -> Optional[Deadline]:
@@ -146,26 +219,34 @@ def remaining() -> Optional[float]:
     return None if deadline is None else deadline.remaining()
 
 
-def check(stage: str = "") -> None:
+def check(stage: str = "", *, report_progress: bool = True) -> None:
     """Raise if the request has run out of time.
 
     Called between stages. It cannot interrupt a call already blocked inside
     a model, which is why the worker client also enforces the remaining time
     on its own read.
     """
+    job = _JOB.get()
+    if job is not None:
+        if job.cancel.is_set():
+            raise RequestCancelled(stage=stage)
+        if report_progress and job.progress is not None and stage:
+            job.progress(stage)
     deadline = _DEADLINE.get()
     if deadline is not None and deadline.expired():
         raise RequestDeadlineExceeded(stage=stage)
 
 
-def budget_for(stage: str, sub_limit: Optional[float] = None) -> Optional[float]:
+def budget_for(
+    stage: str, sub_limit: Optional[float] = None, *, report_progress: bool = True
+) -> Optional[float]:
     """The time a stage may take: the nearer of its sub-limit and what is left.
 
     A stage may be stricter than the request deadline but never more generous,
     which is what stops a per-call budget from resetting the whole request's
     clock.
     """
-    check(stage)
+    check(stage, report_progress=report_progress)
     left = remaining()
     if left is None:
         return sub_limit
