@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, Form, UploadFile
+from fastapi import FastAPI, HTTPException, File, Form, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -142,10 +142,23 @@ async def _model_lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        from services.stream_routes import shutdown as shutdown_stream_jobs
+        shutdown_stream_jobs()
         _shutdown_models()
 
 
 app = FastAPI(lifespan=_model_lifespan)
+from services import stream_routes
+from services.upload_auth import UploadError
+from services.upload_limits import RequestSizeLimitMiddleware
+
+app.include_router(stream_routes.router)
+app.add_middleware(RequestSizeLimitMiddleware)
+
+@app.exception_handler(UploadError)
+async def upload_error_handler(request, exc):
+    return JSONResponse(status_code=exc.status_code, content=exc.to_public_dict(), headers=exc.headers)
+
 logger = logging.getLogger(__name__)
 
 app.add_middleware(
@@ -154,6 +167,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "X-BioBlock-Artifact-SHA256", "X-BioBlock-Releasable"],
 )
 
 
@@ -433,8 +447,11 @@ def readiness_probe():
 
 @app.post("/api/v1/ingest")
 async def ingest_file(
+    request: Request,
     file: UploadFile = File(...),
     profile: str = Form("strict"),
+    tabular_policy: str = Form(""),
+    study_ref: str = Form(""),
 ):
     """
     Privacy-safe upload entry point.
@@ -445,6 +462,30 @@ async def ingest_file(
     _timings = _timed_start()
     _started_ns = _perf_counter_ns()
     try:
+        if os.path.splitext(file.filename or "")[1].casefold() in {".csv", ".xlsx", ".xlsm", ".xls"}:
+            from starlette.concurrency import run_in_threadpool
+            job, submission = await stream_routes.submit_upload(request, file, profile, tabular_policy, study_ref)
+            from services import request_deadline
+            remaining = request_deadline.remaining()
+            completed = await run_in_threadpool(job.done.wait, max(0.0, remaining) if remaining is not None else None)
+            if not completed:
+                try:
+                    stream_routes.pipeline().manager.cancel(job.job_id, job.owner)
+                except UploadError:
+                    stream_routes.pipeline().discard(job)
+                raise RequestDeadlineExceeded(stage="stream.sync.wait")
+            request_deadline.check("stream.sync.complete")
+            if job.state not in {"ready", "held"}:
+                raise HTTPException(job.status_code or 422, job.error_code or "failed_no_output")
+            result = dict(job.result or {})
+            result.update({"job_id": job.job_id, "capability": submission["capability"],
+                           "status_path": submission["status_path"],
+                           "download_path": submission["status_path"] +
+                           ("/artifact" if job.state == "ready" else "/review-artifact")
+                           if stream_routes.pipeline().has_candidate(job.job_id) else None})
+            return result
+        if tabular_policy:
+            raise HTTPException(422, "tabular_policy_not_applicable")
         with _timed_stage("api.receive_validate"):
             header = await file.read(HEADER_READ_LIMIT)
             if not header:
@@ -490,6 +531,8 @@ async def ingest_file(
             text_content=text_content,
             file_content=file_content,
         )
+    except UploadError:
+        raise
     except IngestionError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     except HTTPException:

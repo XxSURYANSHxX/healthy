@@ -60,15 +60,22 @@ class FakeUploadFile:
         self.content_type = content_type
         self.position = 0
         self.seek_offsets = []
+        self.size = len(content)
+        self.closed = False
+        self.largest_read = 0
 
     async def read(self, size=-1):
         if size is None or size < 0:
             size = len(self.content) - self.position
 
+        self.largest_read = max(self.largest_read, size)
         start = self.position
         end = min(start + size, len(self.content))
         self.position = end
         return self.content[start:end]
+
+    async def close(self):
+        self.closed = True
 
     async def seek(self, offset):
         self.seek_offsets.append(offset)
@@ -189,33 +196,18 @@ class TestIngestionRouting(unittest.TestCase):
         self.assertEqual(body["detected_modality"], "csv")
         self.assertEqual(body["handler"], "anonymize_csv")
         self.assertEqual(body["routing_status"], "handler_selected")
-        self.assertEqual(
-            body["anonymization_status"],
-            "completed_with_warnings",
-        )
-        self.assertNotIn("placeholder", response_text.lower())
-        self.assertIn("tabular_summary", body)
+        self.assertEqual(body["anonymization_status"], "manual_review_required")
+        self.assertIn("non_production_detector_mode", body["release_decision"]["reason_codes"])
         summary = body["tabular_summary"]
         self.assertEqual(summary["rows_in"], 5)
         self.assertEqual(summary["rows_out"], 5)
-        self.assertEqual(summary["k"], 5)
-        self.assertEqual(summary["l"], 2)
-        self.assertEqual(
-            summary["direct_identifiers_removed"],
-            ["name", "email", "phone", "mrn"],
-        )
-        self.assertEqual(summary["quasi_identifiers_used"], ["age", "gender"])
-        self.assertEqual(summary["sensitive_column"], "diagnosis")
-        self.assertTrue(summary["k_anonymity_satisfied"])
-        self.assertTrue(summary["l_diversity_satisfied"])
-        self.assertEqual(
-            summary["safe_harbor_report"]["safe_harbor_validation_status"],
-            "passed_with_warnings",
-        )
-        self.assertEqual(
-            summary["safe_harbor_report"]["unresolved_identifier_categories"],
-            [],
-        )
+        self.assertEqual(summary["output_columns"], 7)
+        declared = body["summary"]["tabular_privacy"]
+        self.assertEqual(declared["profile"], "identifier_removal")
+        self.assertIsNone(declared["k_required"])
+        self.assertIsNone(declared["l_required"])
+        self.assertFalse(declared["full_declared_schema_applied"])
+        self.assertIn("download_path", body)
         self.assertEqual(body["downstream"]["ipfs_chunking"], "blocked")
         self.assertEqual(body["downstream"]["cid_encryption"], "blocked")
         self.assertEqual(body["downstream"]["metadata_indexing"], "blocked")
@@ -254,17 +246,11 @@ class TestIngestionRouting(unittest.TestCase):
         response_text = json.dumps(body)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            body["anonymization_status"],
-            "completed_with_warnings",
-        )
-        self.assertEqual(
-            body["tabular_summary"]["precise_geography_columns_removed"],
-            ["LAT", "LON"],
-        )
-        self.assertNotIn("LAT", body["tabular_summary"]["output_columns"])
-        self.assertNotIn("LON", body["tabular_summary"]["output_columns"])
-        self.assertNotIn("ZIP", body["tabular_summary"]["output_columns"])
+        self.assertEqual(body["anonymization_status"], "manual_review_required")
+        self.assertEqual(body["tabular_summary"]["output_columns"], 13)
+        self.assertEqual(body["tabular_summary"]["rows_in"], 5)
+        self.assertEqual(body["summary"]["tabular_privacy"]["profile"], "identifier_removal")
+        self.assertFalse(body["release_decision"]["releasable"])
         for raw_value in (
             "uuid-a",
             "111-22-3333",
@@ -282,16 +268,19 @@ class TestIngestionRouting(unittest.TestCase):
     def test_csv_ingestion_does_not_report_completed_when_k_fails(self):
         csv_content = b"Id,age,gender\na,30,F\nb,31,M\n"
 
-        response = upload_file("small.csv", csv_content, "text/csv")
+        policy = {"policy_version": "tabular-privacy-v1", "profile": "safe_harbor_plus_qi",
+                  "k": 5, "l": None, "t": None, "columns": [
+                      {"index": 0, "header": "Id", "role": "direct_identifier", "entity_type": "OTHER_UNIQUE_ID"},
+                      {"index": 1, "header": "age", "role": "quasi_identifier", "qi_kind": "age"},
+                      {"index": 2, "header": "gender", "role": "quasi_identifier", "qi_kind": "sex"}]}
+        response = client.post("/api/v1/ingest", files={"file": ("small.csv", BytesIO(csv_content), "text/csv")},
+                               data={"tabular_policy": json.dumps(policy)})
         body = response.json()
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            body["anonymization_status"],
-            "failed_privacy_validation",
-        )
-        self.assertFalse(body["tabular_summary"]["k_anonymity_satisfied"])
-        self.assertEqual(body["tabular_summary"]["min_group_size"], 2)
+        self.assertEqual(body["anonymization_status"], "manual_review_required")
+        self.assertFalse(body["release_decision"]["releasable"])
+        self.assertEqual(body["summary"]["tabular_privacy"]["k_required"], 5)
+        self.assertIn("csv_dataset_too_few_rows", body["release_decision"]["reason_codes"])
 
     def test_csv_download_endpoint_reports_analysis_without_releasing_rows(self):
         # Phase 9: /anonymize_csv no longer streams rows. It shares the single
@@ -529,18 +518,18 @@ class TestIngestionRouting(unittest.TestCase):
             content_type="text/csv",
         )
 
-        result = asyncio.run(ingest_file(file=fake_file, profile="strict"))
-
-        self.assertEqual(fake_file.seek_offsets, [0, 0])
-        self.assertEqual(fake_file.position, 0)
+        from starlette.requests import Request
+        request = Request({"type": "http", "method": "POST", "path": "/api/v1/ingest",
+                           "headers": [], "query_string": b""})
+        result = asyncio.run(ingest_file(request=request, file=fake_file, profile="strict",
+                                         tabular_policy="", study_ref=""))
+        self.assertEqual(fake_file.seek_offsets[0], 0)
+        self.assertLessEqual(fake_file.largest_read, 1024 * 1024)
+        self.assertTrue(fake_file.closed)
         self.assertEqual(result["detected_modality"], "csv")
         self.assertEqual(result["handler"], "anonymize_csv")
-        self.assertEqual(
-            result["anonymization_status"],
-            "failed_privacy_validation",
-        )
-        self.assertFalse(result["tabular_summary"]["k_anonymity_satisfied"])
-        self.assertIn("tabular_summary", result)
+        self.assertFalse(result["release_decision"]["releasable"])
+        self.assertEqual(result["tabular_summary"]["rows_in"], 1)
 
     def test_text_upload_returns_only_redacted_content_and_safe_counts(self):
         raw_text = (
